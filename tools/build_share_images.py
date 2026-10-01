@@ -94,6 +94,36 @@ def make(photo, focus, eyebrow, line1, neon_line, sub, cta, out):
 make('escenario-duo.webp', (0.75, 0.35), 'KARAOKE BAR · LA CANDELARIA, BOGOTÁ',
      'EL MEJOR KARAOKE', 'de Bogotá', '+8.000 canciones · Rumba crossover · Cócteles',
      'Reserva tu mesa', 'og-home.jpg')
-make('mesa-ladrillo.webp', (0.7, 0.5), 'EL SARAO PUB · CARTA DIGITAL',
-     'LA CARTA', 'para cantar mejor', 'Cócteles, cervezas, aguardiente, whisky y promos',
-     'Ver precios', 'og-carta.jpg')
+def make_carta(photo, out):
+    """Variante con el texto arriba, para que los cócteles de abajo queden a la vista."""
+    im = cover(os.path.join(IMG, 'site', photo), (0.5, 0.62))
+    im = ImageEnhance.Brightness(im).enhance(0.92)
+    grad = Image.new('L', (W, H))
+    px = grad.load()
+    for x in range(W):
+        for y in range(H):
+            top = max(0.0, 1 - y / (H * 0.62)) ** 1.3 * 235
+            side = max(0.0, 1 - x / (W * 0.55)) * 60 * max(0.0, 1 - y / (H * 0.7))
+            px[x, y] = min(240, int(top + side))
+    im = Image.composite(Image.new('RGB', (W, H), INK), im, grad).convert('RGBA')
+    d = ImageDraw.Draw(im)
+    logo(im, (58, 34), 170)
+    d.text((62, 160), 'EL SARAO PUB · CARTA DIGITAL', font=font('Outfit.ttf', 22, 600), fill=CROWN)
+    title = font('BigShoulders.ttf', 128, 900)
+    d.text((56, 186), 'LA CARTA', font=title, fill=PAPER)
+    x = 56 + d.textlength('LA CARTA', font=title) + 26
+    glow_text(im, (x, 214), 'para cantar mejor', font('InstrumentSerif-Italic.ttf', 84), NEON)
+    d = ImageDraw.Draw(im)
+    f = font('Outfit.ttf', 24, 600)
+    label = 'Ver precios'
+    w = d.textlength(label, font=f) + 44
+    site = font('Outfit.ttf', 24, 500)
+    sw = d.textlength('saraopub.com', font=site)
+    x0 = W - 58 - w - 18 - sw
+    end = pill(d, (x0, 52), label, f, NEON, (255, 255, 255))
+    d.text((end + 18, 80), 'saraopub.com', font=site, fill=PAPER, anchor='lm')
+    im.convert('RGB').save(os.path.join(IMG, out), 'JPEG', quality=86, optimize=True, progressive=True)
+    print(out, os.path.getsize(os.path.join(IMG, out)) // 1024, 'KB')
+
+
+make_carta('carta-cocteles.webp', 'og-carta.jpg')
