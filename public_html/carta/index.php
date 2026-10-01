@@ -79,9 +79,7 @@ $title = $s['business_name'] . ' · Carta';
 <title><?= e($title) ?></title>
 <meta name="description" content="Carta de bebidas de <?= e($s['business_name']) ?>: cócteles, cervezas, aguardiente, ron, whisky y promociones de la semana. <?= e($s['address']) ?>.">
 <meta name="theme-color" content="#0D141A">
-<meta property="og:title" content="<?= e($title) ?>">
-<meta property="og:description" content="<?= e($s['tagline']) ?>">
-<meta property="og:image" content="../assets/img/logo.png">
+<?= share_meta($s, $title, 'Cócteles, cervezas, aguardiente, whisky y promociones de la semana. Mira precios y presentaciones antes de llegar.', '/carta/', 'og-carta.jpg') ?>
 <link rel="icon" href="../assets/img/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

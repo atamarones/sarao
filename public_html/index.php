@@ -79,11 +79,7 @@ $desc = 'Karaoke bar en La Candelaria, Bogotá: más de ' . $songs . ' canciones
 <title><?= e($title) ?></title>
 <meta name="description" content="<?= e($desc) ?>">
 <meta name="theme-color" content="#07090D">
-<link rel="canonical" href="<?= e((string) $s['website']) ?>">
-<meta property="og:type" content="website">
-<meta property="og:title" content="<?= e($title) ?>">
-<meta property="og:description" content="<?= e($desc) ?>">
-<meta property="og:image" content="<?= e(rtrim((string) $s['website'], '/')) ?>/assets/img/site/escenario-duo.webp">
+<?= share_meta($s, $title, $desc, '/', 'og-home.jpg') ?>
 <link rel="icon" href="assets/img/favicon.png">
 <link rel="preload" as="image" href="<?= img('escenario-duo') ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">

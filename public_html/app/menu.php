@@ -146,6 +146,39 @@ function active_promotions(): array
 }
 
 /** URL relativa de una foto de producto; $base ajusta la ruta desde subcarpetas (por ejemplo, '../'). */
+/** Etiquetas Open Graph / Twitter para la vista previa al compartir en WhatsApp, Facebook, X, etc. */
+function share_meta(array $s, string $title, string $desc, string $path, string $image): string
+{
+    $base = rtrim((string) ($s['website'] ?: 'https://saraopub.com'), '/');
+    $url = $base . $path;
+    $img = $base . '/assets/img/' . $image . '?v=' . (int) @filemtime(PUBLIC_ROOT . '/assets/img/' . $image);
+    $tags = [
+        ['property', 'og:type', 'website'],
+        ['property', 'og:site_name', (string) $s['business_name']],
+        ['property', 'og:locale', 'es_CO'],
+        ['property', 'og:url', $url],
+        ['property', 'og:title', $title],
+        ['property', 'og:description', $desc],
+        ['property', 'og:image', $img],
+        ['property', 'og:image:secure_url', $img],
+        ['property', 'og:image:type', 'image/jpeg'],
+        ['property', 'og:image:width', '1200'],
+        ['property', 'og:image:height', '630'],
+        ['property', 'og:image:alt', $title],
+        ['name', 'twitter:card', 'summary_large_image'],
+        ['name', 'twitter:title', $title],
+        ['name', 'twitter:description', $desc],
+        ['name', 'twitter:image', $img],
+    ];
+    $out = '<link rel="canonical" href="' . e($url) . '">' . "
+";
+    foreach ($tags as [$attr, $k, $v]) {
+        $out .= '<meta ' . $attr . '="' . e($k) . '" content="' . e($v) . '">' . "
+";
+    }
+    return $out;
+}
+
 function active_testimonials(): array
 {
     return db()->query('SELECT author, body, rating, source FROM testimonials WHERE is_active = 1 ORDER BY sort_order, id')->fetchAll();
