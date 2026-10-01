@@ -65,6 +65,10 @@ function seed_menu(PDO $pdo, array $seed): void
         foreach ($seed['promotions'] ?? [] as $i => $pr) {
             $insPromo->execute([$pr['title'], $pr['detail'], $pr['days'], $pr['time_from'], $pr['time_to'], ($i + 1) * 10, $ts, $ts]);
         }
+        $insT = $pdo->prepare('INSERT INTO testimonials (author, body, rating, source, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?)');
+        foreach ($seed['testimonials'] ?? [] as $i => $t) {
+            $insT->execute([$t['author'], $t['body'], $t['rating'], $t['source'], ($i + 1) * 10, $ts, $ts]);
+        }
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();

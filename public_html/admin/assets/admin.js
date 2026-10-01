@@ -137,7 +137,7 @@
   }
 
   // ---------- router ----------
-  const views = { productos: renderProducts, categorias: renderCategories, promos: renderPromos, ajustes: renderSettings };
+  const views = { productos: renderProducts, categorias: renderCategories, promos: renderPromos, testimonios: renderTestimonials, ajustes: renderSettings };
   function route() {
     const name = (location.hash || '#productos').slice(1);
     const fn = views[name] || renderProducts;
@@ -217,6 +217,7 @@
       if (page === 'productos') await productAction(btn.dataset.act, id, btn);
       else if (page === 'categorias') await categoryAction(btn.dataset.act, id);
       else if (page === 'promos') await promoAction(btn.dataset.act, id);
+      else if (page === 'testimonios') await testimonialAction(btn.dataset.act, id);
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -233,6 +234,7 @@
         const c = state.categories.find((x) => x.id === id);
         await api('category.save', { ...c, is_active: cb.checked });
       } else if (page === 'promos') await api('promo.toggle', { id, value: cb.checked });
+      else if (page === 'testimonios') await api('testimonial.toggle', { id, value: cb.checked });
       toast(cb.checked ? 'Visible en la carta' : 'Oculto de la carta');
       route();
     } catch (err) {
@@ -577,6 +579,83 @@
     form.elements.title.focus();
   }
 
+  // ---------- testimonios ----------
+  const stars = (n) => '\u2605'.repeat(n) + '\u2606'.repeat(5 - n);
+
+  function renderTestimonials() {
+    const list = state.testimonials;
+    view.innerHTML = `
+      <div class="view-head">
+        <div><h1>Testimonios</h1><p class="muted">Aparecen en el sitio. Copia aquí tus mejores reseñas de Google o Instagram.</p></div>
+        <button class="btn btn-primary" data-act="new">${icon('plus')} Nuevo testimonio</button>
+      </div>
+      ${list.length ? `<ul class="rows">${list.map((t, i) => `
+        <li class="row ${t.is_active ? '' : 'is-off'}" data-id="${t.id}">
+          <div class="row-main">
+            <button class="row-title" data-act="edit">${esc(t.author)} <span class="stars" aria-label="${t.rating} de 5 estrellas">${stars(t.rating)}</span></button>
+            <p class="row-sub">${t.source ? esc(t.source) + ' · ' : ''}${esc(t.body)}</p>
+          </div>
+          <div class="row-actions">
+            <label class="switch"><input type="checkbox" data-act="active" ${t.is_active ? 'checked' : ''}><span class="switch-ui" aria-hidden="true"></span><span class="switch-label">${t.is_active ? 'Visible' : 'Oculto'}</span></label>
+            <button class="icon-btn" data-act="up" ${i === 0 ? 'disabled' : ''} title="Subir">${icon('up')}<span class="sr-only">Subir</span></button>
+            <button class="icon-btn" data-act="down" ${i === list.length - 1 ? 'disabled' : ''} title="Bajar">${icon('down')}<span class="sr-only">Bajar</span></button>
+            <button class="icon-btn icon-danger" data-act="delete" title="Eliminar">${icon('trash')}<span class="sr-only">Eliminar</span></button>
+          </div>
+        </li>`).join('')}</ul>`
+      : `<div class="empty-state"><p class="empty-title">Sin testimonios</p><p class="muted">Agrega el primero para mostrarlo en el sitio.</p></div>`}`;
+  }
+
+  async function testimonialAction(act, id) {
+    const t = state.testimonials.find((x) => x.id === id);
+    if (act === 'new' || act === 'edit') return testimonialEditor(t);
+    if (act === 'up' || act === 'down') {
+      const ids = move(state.testimonials, id, act === 'up' ? -1 : 1);
+      if (!ids) return;
+      await api('testimonial.reorder', { ids });
+    }
+    if (act === 'delete') {
+      if (!(await confirmDialog('¿Eliminar testimonio?', `El testimonio de ${t.author} dejará de mostrarse.`, 'Eliminar'))) return;
+      await api('testimonial.delete', { id });
+      toast('Testimonio eliminado');
+    }
+    renderTestimonials();
+  }
+
+  function testimonialEditor(t) {
+    const isNew = !t;
+    t = t || { author: '', body: '', rating: 5, source: 'Google', is_active: true };
+    const d = openModal(`
+      <form class="modal-body stack" novalidate>
+        <header class="modal-head"><h2 class="modal-title">${isNew ? 'Nuevo testimonio' : 'Editar testimonio'}</h2>
+          <button type="button" class="icon-btn" data-close title="Cerrar">${icon('x')}<span class="sr-only">Cerrar</span></button></header>
+        <p class="alert alert-error form-error" tabindex="-1" hidden></p>
+        <label>Nombre<input name="author" required maxlength="80" value="${esc(t.author)}"></label>
+        <label>Testimonio<textarea name="body" rows="4" maxlength="600" required>${esc(t.body)}</textarea></label>
+        <div class="two">
+          <label>Calificación<select name="rating">${[5, 4, 3, 2, 1].map((n) => `<option value="${n}" ${n === t.rating ? 'selected' : ''}>${stars(n)} (${n})</option>`).join('')}</select></label>
+          <label>Fuente <span class="opt">opcional</span><input name="source" maxlength="40" placeholder="Google, Instagram…" value="${esc(t.source)}"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="is_active" ${t.is_active ? 'checked' : ''}> Visible en el sitio</label>
+        <footer class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+          <button class="btn btn-primary" type="submit">${isNew ? 'Crear testimonio' : 'Guardar cambios'}</button></footer>
+      </form>`);
+    const form = $('form', d);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await withBusy($('[type="submit"]', form), () => api('testimonial.save', {
+          id: t.id, author: form.elements.author.value, body: form.elements.body.value,
+          rating: Number(form.elements.rating.value), source: form.elements.source.value, is_active: form.elements.is_active.checked,
+        }));
+        d.dataset.dirty = '0';
+        d.close();
+        toast(isNew ? 'Testimonio creado' : 'Cambios guardados');
+        renderTestimonials();
+      } catch (err) { showErrors(form, err); }
+    });
+    form.elements.author.focus();
+  }
+
   // ---------- ajustes ----------
   function renderSettings() {
     const s = state.settings;
@@ -592,6 +671,13 @@
           <div class="two">${field('address', 'Dirección', { attrs: 'maxlength="120"' })}${field('phone', 'Teléfono', { attrs: 'maxlength="30" inputmode="tel"' })}</div>
           <div class="two">${field('whatsapp', 'WhatsApp', { attrs: 'maxlength="20" inputmode="tel"', hint: 'Con indicativo, sin espacios: 573163936616', opt: true })}${field('instagram', 'Instagram', { attrs: 'maxlength="40"', hint: 'Usuario sin @', opt: true })}</div>
           <div class="two">${field('website', 'Sitio web', { attrs: 'maxlength="200" inputmode="url"', opt: true })}${field('maps_url', 'Enlace de Google Maps', { attrs: 'maxlength="300" inputmode="url"', opt: true })}</div>
+          <div class="two">${field('tiktok', 'TikTok', { attrs: 'maxlength="40"', hint: 'Usuario sin @', opt: true })}${field('facebook', 'Facebook', { attrs: 'maxlength="300" inputmode="url"', opt: true })}</div>
+          <div class="two">${field('email', 'Correo', { attrs: 'maxlength="120" inputmode="email"', opt: true })}${field('songs_count', 'Canciones en catálogo', { attrs: 'maxlength="12"', hint: 'Se muestra como «+8.000 canciones».' })}</div>
+        </section>
+        <section class="card stack">
+          <h2 class="card-title">Reservas y reseñas</h2>
+          ${field('reservation_url', 'Enlace del formulario de reservas', { attrs: 'maxlength="400" inputmode="url"', hint: 'Todos los botones «Reservar» del sitio llevan aquí.' })}
+          ${field('reviews_url', 'Enlace a las reseñas de Google', { attrs: 'maxlength="600" inputmode="url"', opt: true })}
         </section>
         <section class="card stack">
           <h2 class="card-title">Mensajes</h2>
@@ -630,7 +716,7 @@
     sf.addEventListener('submit', async (e) => {
       e.preventDefault();
       const body = {};
-      ['business_name', 'tagline', 'address', 'phone', 'whatsapp', 'instagram', 'website', 'maps_url', 'notice', 'currency_note'].forEach((k) => { body[k] = sf.elements[k].value; });
+      ['business_name', 'tagline', 'address', 'phone', 'whatsapp', 'instagram', 'tiktok', 'facebook', 'email', 'songs_count', 'reservation_url', 'reviews_url', 'website', 'maps_url', 'notice', 'currency_note'].forEach((k) => { body[k] = sf.elements[k].value; });
       body.hours = {};
       $$('.hour-row', sf).forEach((r) => {
         body.hours[r.dataset.day] = $('.h-open', r).checked ? [$('.h-from', r).value, $('.h-to', r).value] : null;

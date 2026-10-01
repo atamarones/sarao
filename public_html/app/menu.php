@@ -14,7 +14,13 @@ const DEFAULT_SETTINGS = [
     'address' => 'Cra 5 #17-69, Bogotá',
     'phone' => '+573163936616',
     'whatsapp' => '573163936616',
-    'instagram' => '',
+    'instagram' => 'elsaraopub',
+    'tiktok' => 'elsaraopub',
+    'facebook' => 'https://www.facebook.com/people/El-Sarao/100067084803215',
+    'email' => 'saraopub@gmail.com',
+    'reservation_url' => 'https://aima-n8n.yau1cn.easypanel.host/form/637e1a7f-f598-4824-b67e-a1c39c26953c',
+    'reviews_url' => 'https://www.google.com/maps/place/El+Sarao+Pub+-+Karaoke+Bar/@4.6032742,-74.0707668,17z/data=!4m8!3m7!1s0x8e3f99a8c8d17093:0x8f560dbc46b46a00!8m2!3d4.6032742!4d-74.0707668!9m1!1b1',
+    'songs_count' => '8.000',
     'website' => 'https://saraopub.com/',
     'maps_url' => 'https://maps.google.com/?q=4.603288,-74.070768',
     'notice' => '',
@@ -139,7 +145,13 @@ function active_promotions(): array
     return db()->query('SELECT id, title, detail, days, time_from, time_to FROM promotions WHERE is_active = 1 ORDER BY sort_order, id')->fetchAll();
 }
 
-function image_url(?string $file): ?string
+/** URL relativa de una foto de producto; $base ajusta la ruta desde subcarpetas (por ejemplo, '../'). */
+function active_testimonials(): array
 {
-    return $file ? UPLOAD_URL . '/' . rawurlencode($file) : null;
+    return db()->query('SELECT author, body, rating, source FROM testimonials WHERE is_active = 1 ORDER BY sort_order, id')->fetchAll();
+}
+
+function image_url(?string $file, string $base = ''): ?string
+{
+    return $file ? $base . UPLOAD_URL . '/' . rawurlencode($file) : null;
 }

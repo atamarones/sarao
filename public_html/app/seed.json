@@ -1186,5 +1186,19 @@
             "time_from": null,
             "time_to": null
         }
+    ],
+    "testimonials": [
+        {
+            "author": "Paito Pao",
+            "rating": 5,
+            "source": null,
+            "body": "Es un lugar entretenido para sacar a flote ese artista que llevamos dentro, se comparte muy bien con amigos y el lugar es limpio y organizado."
+        },
+        {
+            "author": "Angela Espinel",
+            "rating": 5,
+            "source": null,
+            "body": "Excelente lugar para compartir un rato, es un lugar súper limpio, la atención amable y buenos precios. ¡Definitivamente regresaría!"
+        }
     ]
 }

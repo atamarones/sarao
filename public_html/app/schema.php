@@ -68,6 +68,19 @@ function schema_statements(string $driver): array
             updated_at DATETIME NOT NULL
         )$tail",
 
+        "CREATE TABLE IF NOT EXISTS testimonials (
+            id $pk,
+            author VARCHAR(80) NOT NULL,
+            body VARCHAR(600) NOT NULL,
+            rating INT NOT NULL DEFAULT 5,
+            source VARCHAR(40) NULL,
+            is_active $bool NOT NULL DEFAULT 1,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            CONSTRAINT ck_testimonials_rating CHECK (rating BETWEEN 1 AND 5)
+        )$tail",
+
         "CREATE TABLE IF NOT EXISTS settings (
             k VARCHAR(60) NOT NULL PRIMARY KEY,
             v $text NOT NULL

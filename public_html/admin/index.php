@@ -86,7 +86,7 @@ $v = static fn (string $f): int => (int) @filemtime(__DIR__ . '/assets/' . $f);
     <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
     <button class="btn btn-primary btn-block">Entrar</button>
   </form>
-  <a class="back-link" href="../">Ver la carta pública</a>
+  <a class="back-link" href="../">Ir al sitio</a>
 </main>
 </body>
 <?php else: ?>
@@ -97,10 +97,11 @@ $v = static fn (string $f): int => (int) @filemtime(__DIR__ . '/assets/' . $f);
     <a href="#productos" data-view="productos">Productos</a>
     <a href="#categorias" data-view="categorias">Categorías</a>
     <a href="#promos" data-view="promos">Promos</a>
+    <a href="#testimonios" data-view="testimonios">Testimonios</a>
     <a href="#ajustes" data-view="ajustes">Ajustes</a>
   </nav>
   <div class="topbar-end">
-    <a class="btn btn-ghost" href="../" target="_blank" rel="noopener">Ver carta</a>
+    <a class="btn btn-ghost" href="../" target="_blank" rel="noopener">Ver sitio</a>
     <form method="post" action="logout.php"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="btn btn-ghost">Salir</button></form>
   </div>
 </header>

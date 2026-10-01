@@ -89,12 +89,13 @@ function is_https(): bool
         || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 }
 
-function security_headers(bool $allowInlineStyle = false): void
+function security_headers(bool $allowInlineStyle = false, bool $allowMicrophone = false): void
 {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    // El micrófono solo se habilita en la home, para el medidor de voz (el audio se analiza en el navegador y no se envía).
+    header('Permissions-Policy: camera=(), microphone=' . ($allowMicrophone ? '(self)' : '()') . ', geolocation=()');
     $style = "'self' https://fonts.googleapis.com" . ($allowInlineStyle ? " 'unsafe-inline'" : '');
     header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src $style; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     if (is_https()) {

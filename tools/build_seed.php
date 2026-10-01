@@ -292,7 +292,13 @@ $promotions = [
     ['title' => 'Jueves de cubetas', 'detail' => 'Cubetas de Heineken y Andina al 50 %. Pregunta por la cubeta gratis.', 'days' => '4', 'time_from' => null, 'time_to' => null],
 ];
 
-$seed = ['categories' => $cats, 'promotions' => $promotions];
+// Testimonios publicados en el sitio actual (saraopub.com). Se amplían desde el panel.
+$testimonials = [
+    ['author' => 'Paito Pao', 'rating' => 5, 'source' => null, 'body' => 'Es un lugar entretenido para sacar a flote ese artista que llevamos dentro, se comparte muy bien con amigos y el lugar es limpio y organizado.'],
+    ['author' => 'Angela Espinel', 'rating' => 5, 'source' => null, 'body' => 'Excelente lugar para compartir un rato, es un lugar súper limpio, la atención amable y buenos precios. ¡Definitivamente regresaría!'],
+];
+
+$seed = ['categories' => $cats, 'promotions' => $promotions, 'testimonials' => $testimonials];
 file_put_contents($root . '/public_html/app/seed.json', json_encode($seed, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 $count = array_sum(array_map(static fn ($c) => count($c['products']), $cats));
 echo "\nOK: " . count($cats) . " categorías, $count productos\n";

@@ -215,9 +215,13 @@ function state(): array
     foreach ($promos as &$pr) {
         $pr = array_merge($pr, ['id' => (int) $pr['id'], 'is_active' => (bool) $pr['is_active']]);
     }
+    $tests = $pdo->query('SELECT id, author, body, rating, source, is_active FROM testimonials ORDER BY sort_order, id')->fetchAll();
+    foreach ($tests as &$t) {
+        $t = array_merge($t, ['id' => (int) $t['id'], 'rating' => (int) $t['rating'], 'is_active' => (bool) $t['is_active']]);
+    }
     $s = settings();
     $s['hours'] = hours_from_settings($s);
-    return ['categories' => $cats, 'products' => $prods, 'promotions' => $promos, 'settings' => $s];
+    return ['categories' => $cats, 'products' => $prods, 'promotions' => $promos, 'testimonials' => $tests, 'settings' => $s];
 }
 
 // ---------------------------------------------------------------------------
@@ -458,9 +462,50 @@ try {
             reorder('promotions', (array) (input()['ids'] ?? []));
             respond(['ok' => true, 'state' => state()]);
 
+        // ----- Testimonios -----
+        case 'POST testimonial.save':
+            $id = int_field('id');
+            $author = str_field('author', 80, true, 'el nombre de quien opina');
+            $body = str_field('body', 600, true, 'el testimonio');
+            $source = str_field('source', 40, false, 'La fuente');
+            $rating = (int) (int_field('rating') ?? 5);
+            if ($rating < 1 || $rating > 5) {
+                throw new ApiError('La calificación va de 1 a 5 estrellas.', 422, ['rating' => 'De 1 a 5.']);
+            }
+            $active = bool_field('is_active', true);
+            if ($id) {
+                require_row('testimonials', $id);
+                $pdo->prepare('UPDATE testimonials SET author = ?, body = ?, rating = ?, source = ?, is_active = ?, updated_at = ? WHERE id = ?')
+                    ->execute([$author, $body, $rating, $source, $active, now(), $id]);
+            } else {
+                $pdo->prepare('INSERT INTO testimonials (author, body, rating, source, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$author, $body, $rating, $source, $active, next_order('testimonials'), now(), now()]);
+                $id = (int) $pdo->lastInsertId();
+            }
+            audit($aid, 'save', 'testimonial', $id);
+            respond(['ok' => true, 'id' => $id, 'state' => state()]);
+
+        case 'POST testimonial.toggle':
+            $id = (int) int_field('id');
+            require_row('testimonials', $id);
+            $pdo->prepare('UPDATE testimonials SET is_active = ?, updated_at = ? WHERE id = ?')->execute([bool_field('value'), now(), $id]);
+            respond(['ok' => true, 'state' => state()]);
+
+        case 'POST testimonial.delete':
+            $id = (int) int_field('id');
+            require_row('testimonials', $id);
+            $pdo->prepare('DELETE FROM testimonials WHERE id = ?')->execute([$id]);
+            audit($aid, 'delete', 'testimonial', $id);
+            respond(['ok' => true, 'state' => state()]);
+
+        case 'POST testimonial.reorder':
+            reorder('testimonials', (array) (input()['ids'] ?? []));
+            respond(['ok' => true, 'state' => state()]);
+
         // ----- Ajustes -----
         case 'POST settings.save':
-            $limits = ['business_name' => 80, 'tagline' => 120, 'address' => 120, 'phone' => 30, 'whatsapp' => 20, 'instagram' => 40, 'website' => 200, 'maps_url' => 300, 'notice' => 240, 'currency_note' => 160];
+            $limits = ['business_name' => 80, 'tagline' => 120, 'address' => 120, 'phone' => 30, 'whatsapp' => 20, 'instagram' => 40, 'tiktok' => 40, 'facebook' => 300, 'email' => 120, 'reservation_url' => 400, 'reviews_url' => 600, 'songs_count' => 12, 'website' => 200, 'maps_url' => 300, 'notice' => 240, 'currency_note' => 160];
+            $urlKeys = ['website', 'maps_url', 'facebook', 'reservation_url', 'reviews_url'];
             $in = input();
             foreach ($limits as $k => $max) {
                 if (array_key_exists($k, $in)) {
@@ -468,8 +513,11 @@ try {
                     if (mb_strlen($v) > $max) {
                         throw new ApiError("Un campo supera los $max caracteres.", 422, [$k => "Máximo $max caracteres."]);
                     }
-                    if (in_array($k, ['website', 'maps_url'], true) && $v !== '' && !preg_match('#^https://#i', $v)) {
+                    if (in_array($k, $urlKeys, true) && $v !== '' && !preg_match('#^https://#i', $v)) {
                         throw new ApiError('Los enlaces deben empezar por https://', 422, [$k => 'Debe empezar por https://']);
+                    }
+                    if ($k === 'email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) {
+                        throw new ApiError('Revisa el correo electrónico.', 422, [$k => 'Correo no válido.']);
                     }
                     save_setting($k, $v);
                 }
