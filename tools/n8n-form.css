@@ -1,0 +1,235 @@
+/* El Sarao Pub · estilo del formulario de reservas (n8n Form Trigger → Options → Custom Form Styling)
+   Mismo concepto gráfico que saraopub.com: noche, neón rojo del letrero, dorado de la corona,
+   títulos de cartel (Big Shoulders) y texto en Outfit. */
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Outfit:wght@400;500;600&display=swap');
+
+:root {
+  /* Paleta de saraopub.com */
+  --sarao-ink: #07090D;
+  --sarao-night: #121B24;
+  --sarao-night-2: #1A2632;
+  --sarao-paper: #F6F1F8;
+  --sarao-muted: #A9B2BD;
+  --sarao-faint: #6F7A87;
+  --sarao-line: rgba(246, 241, 248, .12);
+  --sarao-line-2: rgba(246, 241, 248, .22);
+  --sarao-neon: #FF2D3D;
+  --sarao-crown: #F8B800;
+
+  /* Variables propias de n8n */
+  --font-family: 'Outfit', system-ui, sans-serif;
+  --font-weight-normal: 400;
+  --font-weight-bold: 600;
+  --font-size-body: 15px;
+  --font-size-label: 14px;
+  --font-size-input: 16px;
+  --font-size-header: 44px;
+  --font-size-paragraph: 15px;
+  --font-size-subheader: 15px;
+  --font-size-error: 13px;
+  --font-size-link: 12px;
+  --color-background: var(--sarao-ink);
+  --color-card-bg: var(--sarao-night);
+  --color-card-border: var(--sarao-line);
+  --color-card-shadow: rgba(255, 45, 61, .18);
+  --color-header: var(--sarao-paper);
+  --color-header-subtext: var(--sarao-muted);
+  --color-label: var(--sarao-paper);
+  --color-input-border: var(--sarao-line-2);
+  --color-input-text: var(--sarao-paper);
+  --color-focus-border: var(--sarao-crown);
+  --color-submit-btn-bg: var(--sarao-neon);
+  --color-submit-btn-text: #FFFFFF;
+  --color-error: #FF6B6B;
+  --color-required: var(--sarao-neon);
+  --color-link: var(--sarao-faint);
+  --color-html-text: var(--sarao-muted);
+  --color-html-link: var(--sarao-crown);
+  --color-clear-button-bg: var(--sarao-faint);
+  --border-radius-card: 24px;
+  --border-radius-input: 12px;
+  --padding-card: 32px;
+  --padding-form-input: 14px;
+  --box-shadow-card: 0 30px 80px -20px rgba(0, 0, 0, .8), 0 0 60px -20px rgba(255, 45, 61, .35);
+  --opacity-placeholder: 1;
+  color-scheme: dark;
+}
+
+/* Fondo: la sala a oscuras con los reflectores del escenario */
+html, body {
+  min-height: 100%;
+  background-color: var(--sarao-ink) !important;
+}
+body {
+  margin: 0;
+  color: var(--sarao-paper);
+  font-family: var(--font-family) !important;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(45% 40% at 12% 0%, rgba(107, 77, 255, .28), transparent 70%),
+    radial-gradient(45% 40% at 88% 0%, rgba(255, 45, 61, .30), transparent 70%),
+    radial-gradient(60% 35% at 50% 110%, rgba(255, 45, 61, .18), transparent 70%) !important;
+  background-attachment: fixed !important;
+}
+.container { padding-top: 40px; padding-bottom: 48px; }
+
+/* Tarjeta */
+.card {
+  background: linear-gradient(165deg, rgba(26, 38, 50, .92), rgba(18, 27, 36, .96)) !important;
+  border: 1px solid var(--sarao-line) !important;
+  border-radius: var(--border-radius-card) !important;
+  box-shadow: var(--box-shadow-card) !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  animation: sarao-in .6s cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes sarao-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+/* Encabezado con el logo en neón */
+.form-header { text-align: center; margin-bottom: 8px; }
+.form-header::before {
+  content: "";
+  display: block;
+  width: 170px;
+  height: 88px;
+  margin: 0 auto 18px;
+  background: url('https://saraopub.com/assets/img/logo-dark.png') center / contain no-repeat;
+  filter: drop-shadow(0 0 14px rgba(255, 45, 61, .55));
+}
+h1, .form-header h1, #submitted-header {
+  font-family: 'Big Shoulders Display', 'Arial Narrow', sans-serif !important;
+  font-weight: 900 !important;
+  font-size: var(--font-size-header) !important;
+  line-height: .92 !important;
+  letter-spacing: .005em;
+  text-transform: uppercase;
+  color: var(--sarao-paper) !important;
+  margin: 0 0 10px !important;
+}
+.form-header p, .form-header .subheader, #submitted-content, p {
+  color: var(--sarao-muted) !important;
+  font-size: var(--font-size-paragraph) !important;
+  line-height: 1.55;
+}
+
+/* Campos */
+.form-group, .inputs-wrapper > div { margin-bottom: 20px; }
+label, .form-label {
+  display: block;
+  font-family: var(--font-family) !important;
+  font-size: var(--font-size-label) !important;
+  font-weight: 500 !important;
+  color: var(--sarao-paper) !important;
+  margin-bottom: 8px;
+}
+.form-required::after, .required { color: var(--sarao-neon) !important; }
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 50px;
+  padding: 0 16px;
+  background: var(--sarao-ink) !important;
+  color: var(--sarao-paper) !important;
+  border: 1px solid var(--sarao-line-2) !important;
+  border-radius: var(--border-radius-input) !important;
+  font-family: var(--font-family) !important;
+  font-size: var(--font-size-input) !important; /* 16px evita el zoom automático en iPhone */
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+textarea { min-height: 110px; padding: 14px 16px; line-height: 1.5; resize: vertical; }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 44px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--sarao-crown) 50%), linear-gradient(135deg, var(--sarao-crown) 50%, transparent 50%) !important;
+  background-position: calc(100% - 22px) 22px, calc(100% - 16px) 22px !important;
+  background-size: 6px 6px, 6px 6px !important;
+  background-repeat: no-repeat !important;
+}
+select option { background: var(--sarao-night); color: var(--sarao-paper); }
+input::placeholder, textarea::placeholder { color: var(--sarao-faint) !important; opacity: 1; }
+input:hover, textarea:hover, select:hover { border-color: rgba(246, 241, 248, .38) !important; }
+input:focus, textarea:focus, select:focus {
+  outline: none !important;
+  border-color: var(--sarao-crown) !important;
+  box-shadow: 0 0 0 3px rgba(248, 184, 0, .18) !important;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(78%) sepia(64%) saturate(1500%) hue-rotate(2deg) brightness(102%);
+  cursor: pointer;
+}
+input[type="checkbox"], input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--sarao-neon);
+  cursor: pointer;
+}
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--sarao-ink) inset !important;
+  -webkit-text-fill-color: var(--sarao-paper) !important;
+  caret-color: var(--sarao-paper);
+}
+
+/* Errores */
+.error, .error-hidden + .error, span[role="alert"], [class*="error-"] {
+  color: #FF6B6B !important;
+  font-size: var(--font-size-error) !important;
+  font-weight: 500;
+  margin-top: 6px;
+}
+input[aria-invalid="true"], .form-input.error-input { border-color: #FF6B6B !important; }
+
+/* Botón principal: neón del letrero */
+button[type="submit"], #submit-btn, .submit-btn {
+  width: 100%;
+  min-height: 56px;
+  margin-top: 8px;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--sarao-neon) !important;
+  color: #FFFFFF !important;
+  font-family: var(--font-family) !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset, 0 10px 30px -8px rgba(255, 45, 61, .75), 0 0 40px -10px rgba(255, 45, 61, .9);
+  transition: transform .3s cubic-bezier(.16, 1, .3, 1), box-shadow .3s;
+}
+button[type="submit"]:hover, #submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .15) inset, 0 16px 40px -8px rgba(255, 45, 61, .9), 0 0 60px -6px rgba(255, 45, 61, 1);
+}
+button[type="submit"]:active, #submit-btn:active { transform: scale(.98); }
+button[type="submit"]:focus-visible, #submit-btn:focus-visible { outline: 2px solid var(--sarao-crown); outline-offset: 3px; }
+button[type="submit"]:disabled, #submit-btn:disabled { opacity: .6; cursor: progress; transform: none; }
+
+/* Pie de n8n, discreto */
+.n8n-link, .n8n-link a { color: var(--sarao-faint) !important; opacity: .7; font-size: 12px !important; }
+.n8n-link img { filter: grayscale(1) brightness(1.6); opacity: .6; }
+
+/* Aviso de modo prueba */
+.test-notice {
+  background: rgba(248, 184, 0, .1) !important;
+  border: 1px solid rgba(248, 184, 0, .35) !important;
+  color: var(--sarao-crown) !important;
+  border-radius: 14px !important;
+}
+
+/* Celular */
+@media (max-width: 520px) {
+  :root { --font-size-header: 36px; --padding-card: 22px; }
+  .container { padding-top: 20px; }
+  .form-header::before { width: 140px; height: 72px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
