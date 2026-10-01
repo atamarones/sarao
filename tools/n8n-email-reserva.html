@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>Tu reserva en El Sarao Pub está confirmada</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@900&family=Outfit:wght@400;600&display=swap');
+  body { margin: 0; padding: 0; background: #07090D; }
+  a { text-decoration: none; }
+  @media (max-width: 620px) {
+    .wrap { width: 100% !important; }
+    .px { padding-left: 22px !important; padding-right: 22px !important; }
+    .title { font-size: 40px !important; }
+    .btn-cell { display: block !important; width: 100% !important; padding: 0 0 12px 0 !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background-color:#07090D;">
+  <!-- Texto de vista previa en la bandeja de entrada -->
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+    Tu mesa está confirmada para el {{ $('Input Form').item.json["Fecha:"].toDateTime().format('dd/MM/yyyy') }} a las {{ $('Input Form').item.json["Hora:"] }}. ¡Prepara tu canción! 🎤
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#07090D" style="background-color:#07090D;">
+    <tr>
+      <td align="center" style="padding:28px 12px;">
+
+        <table role="presentation" class="wrap" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#121B24" style="width:600px; max-width:600px; background-color:#121B24; border:1px solid #26323D; border-radius:24px; overflow:hidden;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" bgcolor="#0D141A" style="background-color:#0D141A; padding:32px 24px 8px;">
+              <a href="https://saraopub.com/"><img src="https://saraopub.com/assets/img/logo-dark.png" width="170" alt="El Sarao Pub" style="display:block; width:170px; height:auto; border:0;"></a>
+            </td>
+          </tr>
+
+          <!-- Encabezado -->
+          <tr>
+            <td align="center" class="px" bgcolor="#0D141A" style="background-color:#0D141A; padding:12px 40px 34px; font-family:'Outfit', Arial, sans-serif;">
+              <p style="margin:0 0 10px; font-size:12px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:#F8B800;">✦ Reserva confirmada ✦</p>
+              <h1 class="title" style="margin:0; font-family:'Big Shoulders Display', 'Arial Narrow', Impact, Arial, sans-serif; font-size:48px; line-height:46px; font-weight:900; text-transform:uppercase; color:#F6F1F8;">¡Tu mesa está lista!</h1>
+              <p style="margin:16px 0 0; font-size:17px; line-height:26px; color:#A9B2BD;">
+                Hola, <strong style="color:#F6F1F8;">{{ $('Input Form').item.json["A nombre de:"] }}</strong>. Ya tenemos tu mesa y el micrófono esperándote.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Boleto con los datos de la reserva -->
+          <tr>
+            <td class="px" style="padding:30px 40px 6px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#07090D" style="background-color:#07090D; border:1px solid #2B3742; border-radius:18px;">
+                <tr>
+                  <td align="center" style="padding:20px 20px 16px; border-bottom:1px dashed #33404C; font-family:'Outfit', Arial, sans-serif;">
+                    <p style="margin:0; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#6F7A87;">Número de reserva</p>
+                    <p style="margin:6px 0 0; font-family:'Big Shoulders Display', 'Arial Narrow', Impact, Arial, sans-serif; font-size:40px; line-height:40px; font-weight:900; color:#F8B800; letter-spacing:1px;">CO{{ $('CreateReservation').first().json.data.insertId }}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 22px 14px; font-family:'Outfit', Arial, sans-serif;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:12px 0; border-bottom:1px solid #1F2A35; font-size:13px; color:#6F7A87; text-transform:uppercase; letter-spacing:1px;" width="42%">📅 Fecha</td>
+                        <td style="padding:12px 0; border-bottom:1px solid #1F2A35; font-size:17px; font-weight:600; color:#F6F1F8;" align="right">{{ $('Input Form').item.json["Fecha:"].toDateTime().format('dd/MM/yyyy') }}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 0; border-bottom:1px solid #1F2A35; font-size:13px; color:#6F7A87; text-transform:uppercase; letter-spacing:1px;">🕖 Hora</td>
+                        <td style="padding:12px 0; border-bottom:1px solid #1F2A35; font-size:17px; font-weight:600; color:#F6F1F8;" align="right">{{ $('Input Form').item.json["Hora:"] }}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 0; border-bottom:1px solid #1F2A35; font-size:13px; color:#6F7A87; text-transform:uppercase; letter-spacing:1px;">👥 Personas</td>
+                        <td style="padding:12px 0; border-bottom:1px solid #1F2A35; font-size:17px; font-weight:600; color:#F6F1F8;" align="right">{{ $('Input Form').first().json['Numero de personas:'] }}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:12px 0; font-size:13px; color:#6F7A87; text-transform:uppercase; letter-spacing:1px;">📍 Dónde</td>
+                        <td style="padding:12px 0; font-size:17px; font-weight:600; color:#F6F1F8;" align="right">Cra. 5 #17-69, La Candelaria</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Botones -->
+          <tr>
+            <td class="px" style="padding:24px 40px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td class="btn-cell" width="50%" style="padding-right:6px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" bgcolor="#FF2D3D" style="background-color:#FF2D3D; border-radius:999px;">
+                          <a href="https://saraopub.com/carta/" style="display:block; padding:15px 18px; font-family:'Outfit', Arial, sans-serif; font-size:16px; font-weight:600; color:#FFFFFF; text-decoration:none; border-radius:999px;">Ver la carta</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td class="btn-cell" width="50%" style="padding-left:6px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="border:1px solid #3A4652; border-radius:999px;">
+                          <a href="https://maps.google.com/?q=4.6032742,-74.0707668" style="display:block; padding:14px 18px; font-family:'Outfit', Arial, sans-serif; font-size:16px; font-weight:600; color:#F6F1F8; text-decoration:none; border-radius:999px;">Cómo llegar</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Recomendaciones -->
+          <tr>
+            <td class="px" style="padding:22px 40px 6px; font-family:'Outfit', Arial, sans-serif;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#1A2632" style="background-color:#1A2632; border-radius:16px; border-left:3px solid #F8B800;">
+                <tr>
+                  <td style="padding:16px 18px; font-size:15px; line-height:23px; color:#D5DBE2;">
+                    <strong style="color:#F8B800;">Para que todo salga perfecto</strong><br>
+                    🎤 Te recomendamos llegar 10 minutos antes de tu hora.<br>
+                    ⏱️ La mesa se mantiene 15 minutos después de la hora reservada.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Contacto -->
+          <tr>
+            <td class="px" style="padding:22px 40px 30px; font-family:'Outfit', Arial, sans-serif; font-size:15px; line-height:24px; color:#A9B2BD;">
+              ¿Necesitas cambiar algo? Escríbenos a
+              <a href="mailto:saraopub@gmail.com" style="color:#F8B800; text-decoration:none;">saraopub@gmail.com</a>
+              o llámanos al <a href="tel:+573167107509" style="color:#F8B800; text-decoration:none; white-space:nowrap;">316 710 7509</a>.<br>
+              ¡Gracias por elegirnos! Prepara tu mejor canción. 🎶
+            </td>
+          </tr>
+
+          <!-- Pie -->
+          <tr>
+            <td align="center" bgcolor="#0D141A" style="background-color:#0D141A; padding:24px 24px 28px; border-top:1px solid #1F2A35; font-family:'Outfit', Arial, sans-serif;">
+              <p style="margin:0; font-family:'Big Shoulders Display', 'Arial Narrow', Impact, Arial, sans-serif; font-size:22px; font-weight:900; text-transform:uppercase; color:#F6F1F8;">El mejor karaoke de Bogotá</p>
+              <p style="margin:10px 0 14px; font-size:13px; color:#6F7A87;">Cra. 5 #17-69, La Candelaria · Bogotá</p>
+              <p style="margin:0; font-size:13px;">
+                <a href="https://saraopub.com/" style="color:#A9B2BD; text-decoration:none;">saraopub.com</a>
+                <span style="color:#33404C;">&nbsp;·&nbsp;</span>
+                <a href="https://www.instagram.com/elsaraopub/" style="color:#A9B2BD; text-decoration:none;">Instagram</a>
+                <span style="color:#33404C;">&nbsp;·&nbsp;</span>
+                <a href="https://www.tiktok.com/@elsaraopub" style="color:#A9B2BD; text-decoration:none;">TikTok</a>
+              </p>
+              <p style="margin:16px 0 0; font-size:11px; line-height:16px; color:#4E5966;">Prohíbase el expendio de bebidas embriagantes a menores de edad. El exceso de alcohol es perjudicial para la salud.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
