@@ -14,3 +14,7 @@ desktop.ini
 .vscode/
 .idea/
 *.log
+
+# Paquetes de despliegue y videos originales
+dist/
+videos/
