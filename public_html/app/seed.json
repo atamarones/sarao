@@ -1,0 +1,1190 @@
+{
+    "categories": [
+        {
+            "name": "Cócteles",
+            "description": null,
+            "products": [
+                {
+                    "name": "Margarita Blue",
+                    "description": null,
+                    "price": 30000,
+                    "badge": null,
+                    "image": "margarita-blue.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Cuba Libre",
+                    "description": null,
+                    "price": 30000,
+                    "badge": null,
+                    "image": "cuba-libre.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Caipiroska",
+                    "description": null,
+                    "price": 30000,
+                    "badge": null,
+                    "image": "caipiroska.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Mojito clásico",
+                    "description": null,
+                    "price": 30000,
+                    "badge": null,
+                    "image": "mojito-clasico.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Margarita clásica",
+                    "description": null,
+                    "price": 30000,
+                    "badge": null,
+                    "image": "margarita-clasica.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Cócteles 2×40",
+                    "description": "Dos cócteles iguales por $40.000. Miércoles a sábado, de 6 a 10 p. m.",
+                    "price": null,
+                    "badge": "Promo",
+                    "image": "cocteles-2x40.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Mojito",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Margarita",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Margarita Blue",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Gin Tonic",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Caipiroska",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Cuba Libre",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Margarita Red",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Mojito Sarao",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Ron",
+            "description": null,
+            "products": [
+                {
+                    "name": "Cacique 500 Gran Reserva",
+                    "description": "Ron venezolano.",
+                    "price": null,
+                    "badge": null,
+                    "image": "cacique-500-gran-reserva.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 20000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 140000
+                        }
+                    ]
+                },
+                {
+                    "name": "Viejo de Caldas",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "viejo-de-caldas.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 10000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 60000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 110000
+                        }
+                    ]
+                },
+                {
+                    "name": "Havana Club Añejo Especial",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "havana-club-anejo-especial.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 20000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 130000
+                        }
+                    ]
+                },
+                {
+                    "name": "Medellín Añejo 3 años",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "medellin-anejo-3-anos.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 15000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 55000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 110000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Aguardiente",
+            "description": null,
+            "products": [
+                {
+                    "name": "Amarillo de Manzanares",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "amarillo-de-manzanares.webp",
+                    "is_featured": true,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 20000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 80000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 150000
+                        }
+                    ]
+                },
+                {
+                    "name": "Antioqueño Azul",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "antioqueno-azul.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 15000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 65000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 120000
+                        },
+                        {
+                            "label": "Combo media",
+                            "detail": "375 ml + 4 Andina",
+                            "note": null,
+                            "price": 85000
+                        },
+                        {
+                            "label": "Combo botella",
+                            "detail": "750 ml + 4 Andina",
+                            "note": null,
+                            "price": 140000
+                        }
+                    ]
+                },
+                {
+                    "name": "Néctar Club",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "nectar-club.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 10000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 60000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 100000
+                        },
+                        {
+                            "label": "Combo media",
+                            "detail": "375 ml + 4 Andina",
+                            "note": null,
+                            "price": 75000
+                        },
+                        {
+                            "label": "Combo botella",
+                            "detail": "750 ml + 4 Andina",
+                            "note": null,
+                            "price": 120000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Cervezas",
+            "description": null,
+            "products": [
+                {
+                    "name": "Club Colombia Dorada",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "club-colombia-dorada.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 9000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 10000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 45000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 4500
+                        }
+                    ]
+                },
+                {
+                    "name": "Stella Artois",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "stella-artois.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 12000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 13000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 65000
+                        }
+                    ]
+                },
+                {
+                    "name": "Corona Cero",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "corona-cero.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 10000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 11000
+                        }
+                    ]
+                },
+                {
+                    "name": "Club Colombia Trigo",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "club-colombia-trigo.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 9000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 45000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 4500
+                        }
+                    ]
+                },
+                {
+                    "name": "Cerveza Poker",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "cerveza-poker.webp",
+                    "is_featured": true,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 8000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 9000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 42000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 4000
+                        }
+                    ]
+                },
+                {
+                    "name": "Corona",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "corona.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 12000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 13000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 65000
+                        }
+                    ]
+                },
+                {
+                    "name": "Cubeta Andina + ½ Antioqueño",
+                    "description": "Cubeta de cerveza Andina con media de Antioqueño.",
+                    "price": 75000,
+                    "badge": "Combo",
+                    "image": "cubeta-andina-media-antioqueno.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Águila",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "aguila.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 8000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 9000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 42000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 4000
+                        }
+                    ]
+                },
+                {
+                    "name": "Heineken 250 ml",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "heineken-250-ml.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": "250 ml",
+                            "note": null,
+                            "price": 7000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 35000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 3500
+                        },
+                        {
+                            "label": "Cubeta al 50 %",
+                            "detail": null,
+                            "note": "Solo jueves",
+                            "price": 17500
+                        },
+                        {
+                            "label": "Cubeta gratis",
+                            "detail": null,
+                            "note": "Solo jueves",
+                            "price": 0
+                        }
+                    ]
+                },
+                {
+                    "name": "Cubeta Andina + ½ Néctar",
+                    "description": "Cubeta de cerveza Andina con media de Néctar.",
+                    "price": 65000,
+                    "badge": "Combo",
+                    "image": "cubeta-andina-media-nectar.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Club Colombia Roja",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "club-colombia-roja.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 9000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 45000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 4500
+                        }
+                    ]
+                },
+                {
+                    "name": "Andina",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "andina.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 8000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 9000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 35000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 4000
+                        },
+                        {
+                            "label": "Cubeta al 50 %",
+                            "detail": null,
+                            "note": "Solo jueves",
+                            "price": 17500
+                        },
+                        {
+                            "label": "Cubeta gratis",
+                            "detail": null,
+                            "note": "Solo jueves",
+                            "price": 0
+                        }
+                    ]
+                },
+                {
+                    "name": "Águila Light",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "aguila-light.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 8000
+                        },
+                        {
+                            "label": "Michelada",
+                            "detail": null,
+                            "note": null,
+                            "price": 9000
+                        },
+                        {
+                            "label": "Cubeta",
+                            "detail": null,
+                            "note": null,
+                            "price": 40000
+                        },
+                        {
+                            "label": "Promo 50 %",
+                            "detail": null,
+                            "note": "Solo miércoles",
+                            "price": 4000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Vinos",
+            "description": null,
+            "products": [
+                {
+                    "name": "Frontera Carmenere",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "frontera-carmenere.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 70000
+                        }
+                    ]
+                },
+                {
+                    "name": "Frontera Cabernet Sauvignon",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "frontera-cabernet-sauvignon.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 70000
+                        }
+                    ]
+                },
+                {
+                    "name": "Frontera Merlot",
+                    "description": null,
+                    "price": 70000,
+                    "badge": null,
+                    "image": "frontera-merlot.webp",
+                    "is_featured": true,
+                    "variants": []
+                },
+                {
+                    "name": "Frontera Malbec",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "frontera-malbec.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 70000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Tequila",
+            "description": null,
+            "products": [
+                {
+                    "name": "José Cuervo Especial Reposado",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "jose-cuervo-especial-reposado.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 20000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 120000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 200000
+                        }
+                    ]
+                },
+                {
+                    "name": "Olmeca Reposado",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "olmeca-reposado.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 20000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "350 ml",
+                            "note": null,
+                            "price": 70000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 180000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Vodka",
+            "description": null,
+            "products": [
+                {
+                    "name": "Smirnoff",
+                    "description": null,
+                    "price": 150000,
+                    "badge": null,
+                    "image": "smirnoff.webp",
+                    "is_featured": false,
+                    "variants": []
+                }
+            ]
+        },
+        {
+            "name": "Whisky",
+            "description": null,
+            "products": [
+                {
+                    "name": "Jack Daniel's Honey 700 ml",
+                    "description": null,
+                    "price": 250000,
+                    "badge": null,
+                    "image": "jack-daniels-honey-700-ml.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Black & White",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "black-y-white.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 18000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 80000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "700 ml",
+                            "note": null,
+                            "price": 150000
+                        }
+                    ]
+                },
+                {
+                    "name": "Jack Daniel's",
+                    "description": null,
+                    "price": 250000,
+                    "badge": null,
+                    "image": "jack-daniels.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Old Parr",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "old-parr.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 24000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "500 ml",
+                            "note": null,
+                            "price": 170000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 230000
+                        }
+                    ]
+                },
+                {
+                    "name": "Buchanan's 12 años",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "buchanans-12-anos.webp",
+                    "is_featured": true,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 30000
+                        },
+                        {
+                            "label": "Media",
+                            "detail": "375 ml",
+                            "note": null,
+                            "price": 180000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 300000
+                        }
+                    ]
+                },
+                {
+                    "name": "Jameson Irish Whiskey",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "jameson-irish-whiskey.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 20000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": "750 ml",
+                            "note": null,
+                            "price": 190000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Ginebra",
+            "description": null,
+            "products": [
+                {
+                    "name": "Gordon's",
+                    "description": null,
+                    "price": null,
+                    "badge": null,
+                    "image": "gordons.webp",
+                    "is_featured": false,
+                    "variants": [
+                        {
+                            "label": "Trago",
+                            "detail": null,
+                            "note": null,
+                            "price": 14000
+                        },
+                        {
+                            "label": "Botella",
+                            "detail": null,
+                            "note": null,
+                            "price": 140000
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Gaseosas",
+            "description": null,
+            "products": [
+                {
+                    "name": "Canada Dry",
+                    "description": null,
+                    "price": 8000,
+                    "badge": null,
+                    "image": "canada-dry.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Gatorade",
+                    "description": null,
+                    "price": 10000,
+                    "badge": null,
+                    "image": "gatorade.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Coca-Cola",
+                    "description": null,
+                    "price": 8000,
+                    "badge": null,
+                    "image": "coca-cola.webp",
+                    "is_featured": false,
+                    "variants": []
+                }
+            ]
+        },
+        {
+            "name": "Agua tónica",
+            "description": null,
+            "products": [
+                {
+                    "name": "Agua tónica Schweppes",
+                    "description": null,
+                    "price": 10000,
+                    "badge": null,
+                    "image": "agua-tonica-schweppes.webp",
+                    "is_featured": false,
+                    "variants": []
+                }
+            ]
+        },
+        {
+            "name": "Agua",
+            "description": null,
+            "products": [
+                {
+                    "name": "Agua Cielo",
+                    "description": null,
+                    "price": 7000,
+                    "badge": null,
+                    "image": "agua-cielo.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Agua Brisa con gas 600 ml",
+                    "description": null,
+                    "price": 7000,
+                    "badge": null,
+                    "image": "agua-brisa-con-gas-600-ml.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Agua Zalva",
+                    "description": null,
+                    "price": 7000,
+                    "badge": null,
+                    "image": "agua-zalva.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Agua Cristal",
+                    "description": null,
+                    "price": 7000,
+                    "badge": null,
+                    "image": "agua-cristal.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Agua Cristal con gas",
+                    "description": null,
+                    "price": 7000,
+                    "badge": null,
+                    "image": "agua-cristal-con-gas.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Bretaña",
+                    "description": null,
+                    "price": 9500,
+                    "badge": null,
+                    "image": "bretana.webp",
+                    "is_featured": false,
+                    "variants": []
+                }
+            ]
+        },
+        {
+            "name": "Adicionales",
+            "description": "Cobros adicionales",
+            "products": [
+                {
+                    "name": "Descorche",
+                    "description": "Por botella que traigas.",
+                    "price": 60000,
+                    "badge": null,
+                    "image": "descorche.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Vaso",
+                    "description": null,
+                    "price": 10000,
+                    "badge": null,
+                    "image": "vaso.webp",
+                    "is_featured": false,
+                    "variants": []
+                },
+                {
+                    "name": "Vaso michelado",
+                    "description": null,
+                    "price": 1000,
+                    "badge": null,
+                    "image": "vaso-michelado.webp",
+                    "is_featured": false,
+                    "variants": []
+                }
+            ]
+        },
+        {
+            "name": "Decoración",
+            "description": null,
+            "products": [
+                {
+                    "name": "Decoración de cumpleaños",
+                    "description": "1 cortina, 20 globos, letrero de «Feliz cumpleaños» y set de globos decorativos (estrellas, corazones, números u otro motivo; máximo 2).\nImagen solo de referencia.",
+                    "price": 80000,
+                    "badge": null,
+                    "image": "decoracion-de-cumpleanos.webp",
+                    "is_featured": false,
+                    "variants": []
+                }
+            ]
+        }
+    ],
+    "promotions": [
+        {
+            "title": "2 cócteles por $40.000",
+            "detail": "Mojito, margarita, margarita blue, gin tonic, caipiroska, cuba libre y más.",
+            "days": "3,4,5,6",
+            "time_from": "18:00",
+            "time_to": "22:00"
+        },
+        {
+            "title": "Cerveza al 50 %",
+            "detail": "Águila, Águila Light, Andina, Poker, Heineken y Club Colombia Dorada, Roja y Trigo.",
+            "days": "3",
+            "time_from": null,
+            "time_to": null
+        },
+        {
+            "title": "Jueves de cubetas",
+            "detail": "Cubetas de Heineken y Andina al 50 %. Pregunta por la cubeta gratis.",
+            "days": "4",
+            "time_from": null,
+            "time_to": null
+        }
+    ]
+}

@@ -1,0 +1,16 @@
+# Configuración con credenciales: la genera install.php en cada servidor
+public_html/app/config.php
+
+# Base local de pruebas (SQLite)
+database/
+
+# Export crudo de Pirpos: contiene costos, stock y datos internos del negocio
+tools/pirpos-menu.json
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.log
