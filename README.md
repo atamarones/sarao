@@ -57,6 +57,10 @@ La carta muestra «Abierto · hasta las 3 a. m.» o «Cerrado · abre hoy a las 
 - `app/` (configuración con credenciales) está bloqueada desde el navegador.
 - Registro de auditoría (`audit_log`): quién creó, editó o borró qué y cuándo.
 
+## Precios desde el POS (angelo-pos)
+
+El catálogo y los precios se administran en el sistema operativo (angelo-pos) y el sitio los recibe solo. En Ajustes → «Precios desde el POS» se configura la URL del POS, el id de la tienda y el token del feed (`MENU_FEED_TOKEN`). La carta sincroniza en segundo plano como mucho una vez por hora, y el botón «Sincronizar ahora» lo fuerza. Los productos nuevos del POS llegan **ocultos**: en Productos se les pone foto y se activan. El sitio nunca borra productos ni los muestra por su cuenta; si el POS desactiva uno, aquí se oculta. Detalle del contrato y reglas: `docs/unificacion-pos-carta.md`.
+
 ## Probar en local (opcional)
 
 ```bash

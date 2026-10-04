@@ -38,6 +38,8 @@ function schema_statements(string $driver): array
             sort_order INT NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
+            pos_product_id VARCHAR(36) NULL,
+            pos_synced_at DATETIME NULL,
             CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
             CONSTRAINT ck_products_price CHECK (price IS NULL OR price >= 0)
         )$tail",
@@ -51,6 +53,8 @@ function schema_statements(string $driver): array
             price INT NOT NULL,
             sort_order INT NOT NULL DEFAULT 0,
             is_active $bool NOT NULL DEFAULT 1,
+            pos_product_id VARCHAR(36) NULL,
+            pos_synced_at DATETIME NULL,
             CONSTRAINT fk_variants_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
             CONSTRAINT ck_variants_price CHECK (price >= 0)
         )$tail",
@@ -112,5 +116,7 @@ function schema_statements(string $driver): array
         'CREATE INDEX idx_products_category ON products (category_id, sort_order)',
         'CREATE INDEX idx_variants_product ON product_variants (product_id, sort_order)',
         'CREATE INDEX idx_login_ip ON login_attempts (ip, attempted_at)',
+        'CREATE INDEX idx_products_pos ON products (pos_product_id)',
+        'CREATE INDEX idx_variants_pos ON product_variants (pos_product_id)',
     ];
 }

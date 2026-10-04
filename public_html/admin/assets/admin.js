@@ -657,8 +657,20 @@
   }
 
   // ---------- ajustes ----------
+  function posStatusText(pos) {
+    if (!pos.configured) return 'Sin conectar.';
+    if (pos.error) return 'Último intento con error: ' + pos.error;
+    if (!pos.last) return 'Conectado. Aún no se ha sincronizado.';
+    const when = pos.synced_at ? new Date(pos.synced_at * 1000).toLocaleString('es-CO') : '';
+    const l = pos.last;
+    let t = `Última sincronización ${when}: ${l.updated || 0} actualizados, ${l.created || 0} creados ocultos, ${l.unchanged || 0} sin cambios.`;
+    if (l.orphans && l.orphans.length) t += ' Revisar: ' + l.orphans.join('; ') + '.';
+    return t;
+  }
+
   function renderSettings() {
     const s = state.settings;
+    const pos = state.pos || { configured: false };
     const field = (k, label, opts = {}) => `<label>${label}${opts.opt ? ' <span class="opt">opcional</span>' : ''}
       <input name="${k}" value="${esc(s[k])}" ${opts.attrs || ''}>${opts.hint ? `<span class="hint">${opts.hint}</span>` : ''}</label>`;
     view.innerHTML = `
@@ -698,6 +710,14 @@
             </div>`;
           }).join('')}</div>
         </section>
+        <section class="card stack">
+          <h2 class="card-title">Precios desde el POS</h2>
+          <p class="hint">Conecta el sistema operativo (angelo-pos). Los precios y productos nuevos llegan solos cada hora; aquí decides foto, descripción y qué se muestra.</p>
+          <div class="two">${field('pos_feed_url', 'URL del POS', { attrs: 'maxlength="200" inputmode="url" placeholder="https://pos.saraopub.com"', opt: true })}${field('pos_store_id', 'Id de la tienda en el POS', { attrs: 'maxlength="36" placeholder="uuid de la tienda"', opt: true })}</div>
+          <label>Token del feed <span class="opt">opcional</span><input name="pos_feed_token" type="password" autocomplete="off" maxlength="200" placeholder="${pos.token_set ? 'Guardado. Escribe uno nuevo para reemplazarlo.' : 'MENU_FEED_TOKEN del POS'}"><span class="hint">No se vuelve a mostrar. Déjalo vacío para conservar el actual.</span></label>
+          <p class="hint" id="pos-status">${posStatusText(pos)}</p>
+          <div><button class="btn btn-ghost" type="button" id="pos-sync" ${pos.configured ? '' : 'disabled'}>Sincronizar ahora</button></div>
+        </section>
         <div class="sticky-save"><button class="btn btn-primary" type="submit">Guardar ajustes</button></div>
       </form>
       <form class="card stack narrow" id="pf" novalidate>
@@ -716,7 +736,8 @@
     sf.addEventListener('submit', async (e) => {
       e.preventDefault();
       const body = {};
-      ['business_name', 'tagline', 'address', 'phone', 'whatsapp', 'instagram', 'tiktok', 'facebook', 'email', 'songs_count', 'reservation_url', 'reviews_url', 'website', 'maps_url', 'notice', 'currency_note'].forEach((k) => { body[k] = sf.elements[k].value; });
+      ['business_name', 'tagline', 'address', 'phone', 'whatsapp', 'instagram', 'tiktok', 'facebook', 'email', 'songs_count', 'reservation_url', 'reviews_url', 'website', 'maps_url', 'notice', 'currency_note', 'pos_feed_url', 'pos_store_id'].forEach((k) => { body[k] = sf.elements[k].value; });
+      if (sf.elements.pos_feed_token.value) body.pos_feed_token = sf.elements.pos_feed_token.value;
       body.hours = {};
       $$('.hour-row', sf).forEach((r) => {
         body.hours[r.dataset.day] = $('.h-open', r).checked ? [$('.h-from', r).value, $('.h-to', r).value] : null;
@@ -725,7 +746,21 @@
         await withBusy($('[type="submit"]', sf), () => api('settings.save', body));
         $('.form-error', sf).hidden = true;
         toast('Ajustes guardados');
+        sf.elements.pos_feed_token.value = '';
+        $('#pos-status').textContent = posStatusText(state.pos || {});
+        $('#pos-sync').disabled = !(state.pos && state.pos.configured);
       } catch (err) { showErrors(sf, err); }
+    });
+    $('#pos-sync').addEventListener('click', async () => {
+      try {
+        const r = await withBusy($('#pos-sync'), () => api('pos.sync', {}));
+        $('#pos-status').textContent = posStatusText(state.pos || {});
+        toast(`Sincronizado: ${r.summary.updated} actualizados, ${r.summary.created} creados`);
+        if (r.summary.created) toast('Los productos nuevos quedaron ocultos en Productos: ponles foto y actívalos.', 'warn');
+      } catch (err) {
+        $('#pos-status').textContent = err.message;
+        toast(err.message, 'error');
+      }
     });
 
     const pf = $('#pf');

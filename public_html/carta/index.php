@@ -3,11 +3,15 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
 require __DIR__ . '/../app/menu.php';
+require __DIR__ . '/../app/pos_sync.php';
 
 if (!is_installed()) {
     header('Location: ../install.php');
     exit;
 }
+
+// Precios desde el POS, como mucho una vez por hora y después de responder.
+pos_sync_after_response();
 
 security_headers();
 header('Cache-Control: no-cache');

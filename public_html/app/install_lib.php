@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/schema.php';
+require_once __DIR__ . '/upgrade.php';
 
 /** Crea tablas, carga el menú inicial (si la BD está vacía) y crea el administrador. */
 function run_install(PDO $pdo, string $driver, string $adminUser, string $adminPass): array
@@ -16,6 +17,8 @@ function run_install(PDO $pdo, string $driver, string $adminUser, string $adminP
             }
         }
     }
+
+    run_upgrades($pdo, $driver);
 
     $seeded = false;
     $count = (int) $pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();

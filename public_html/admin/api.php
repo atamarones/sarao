@@ -8,6 +8,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
 require __DIR__ . '/../app/menu.php';
+require __DIR__ . '/../app/upgrade.php';
+require __DIR__ . '/../app/pos_sync.php';
 
 security_headers();
 header('Cache-Control: no-store');
@@ -219,9 +221,9 @@ function state(): array
     foreach ($tests as &$t) {
         $t = array_merge($t, ['id' => (int) $t['id'], 'rating' => (int) $t['rating'], 'is_active' => (bool) $t['is_active']]);
     }
-    $s = settings();
+    $s = public_settings(settings());
     $s['hours'] = hours_from_settings($s);
-    return ['categories' => $cats, 'products' => $prods, 'promotions' => $promos, 'testimonials' => $tests, 'settings' => $s];
+    return ['categories' => $cats, 'products' => $prods, 'promotions' => $promos, 'testimonials' => $tests, 'settings' => $s, 'pos' => pos_status()];
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +249,8 @@ $pdo = db();
 try {
     switch ($method . ' ' . $action) {
         case 'GET state':
+            // Una base instalada antes de esta versión gana las columnas nuevas al abrir el panel.
+            run_upgrades($pdo, db_driver());
             respond(state());
 
         // ----- Categorías -----
@@ -504,8 +508,8 @@ try {
 
         // ----- Ajustes -----
         case 'POST settings.save':
-            $limits = ['business_name' => 80, 'tagline' => 120, 'address' => 120, 'phone' => 30, 'whatsapp' => 20, 'instagram' => 40, 'tiktok' => 40, 'facebook' => 300, 'email' => 120, 'reservation_url' => 400, 'reviews_url' => 600, 'songs_count' => 12, 'website' => 200, 'maps_url' => 300, 'notice' => 240, 'currency_note' => 160];
-            $urlKeys = ['website', 'maps_url', 'facebook', 'reservation_url', 'reviews_url'];
+            $limits = ['business_name' => 80, 'tagline' => 120, 'address' => 120, 'phone' => 30, 'whatsapp' => 20, 'instagram' => 40, 'tiktok' => 40, 'facebook' => 300, 'email' => 120, 'reservation_url' => 400, 'reviews_url' => 600, 'songs_count' => 12, 'website' => 200, 'maps_url' => 300, 'notice' => 240, 'currency_note' => 160, 'pos_feed_url' => 200, 'pos_store_id' => 36, 'pos_feed_token' => 200];
+            $urlKeys = ['website', 'maps_url', 'facebook', 'reservation_url', 'reviews_url', 'pos_feed_url'];
             $in = input();
             foreach ($limits as $k => $max) {
                 if (array_key_exists($k, $in)) {
@@ -518,6 +522,13 @@ try {
                     }
                     if ($k === 'email' && $v !== '' && !filter_var($v, FILTER_VALIDATE_EMAIL)) {
                         throw new ApiError('Revisa el correo electrónico.', 422, [$k => 'Correo no válido.']);
+                    }
+                    if ($k === 'pos_store_id' && $v !== '' && !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $v)) {
+                        throw new ApiError('El id de tienda del POS debe ser un uuid.', 422, [$k => 'Debe ser un uuid.']);
+                    }
+                    // El token nunca viaja al navegador; un campo vacío significa "conservar el actual".
+                    if ($k === 'pos_feed_token' && $v === '') {
+                        continue;
                     }
                     save_setting($k, $v);
                 }
@@ -536,6 +547,15 @@ try {
             }
             audit($aid, 'update', 'settings');
             respond(['ok' => true, 'state' => state()]);
+
+        // ----- POS (angelo-pos) -----
+        case 'POST pos.sync':
+            try {
+                $summary = pos_sync(true, $aid);
+            } catch (PosSyncError $e) {
+                throw new ApiError($e->getMessage(), 502);
+            }
+            respond(['ok' => true, 'summary' => $summary, 'state' => state()]);
 
         case 'POST account.password':
             $current = (string) (input()['current'] ?? '');

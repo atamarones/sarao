@@ -18,7 +18,8 @@ function config(?string $key = null): mixed
 {
     static $cfg = null;
     if ($cfg === null) {
-        $file = APP_ROOT . '/config.php';
+        // SARAO_CONFIG_FILE permite apuntar a otra configuración (pruebas sobre una copia de la base).
+        $file = getenv('SARAO_CONFIG_FILE') ?: APP_ROOT . '/config.php';
         $cfg = is_file($file) ? require $file : [];
     }
     return $key === null ? $cfg : ($cfg[$key] ?? null);
@@ -26,7 +27,18 @@ function config(?string $key = null): mixed
 
 function is_installed(): bool
 {
-    return is_file(APP_ROOT . '/config.php');
+    return is_file(getenv('SARAO_CONFIG_FILE') ?: APP_ROOT . '/config.php');
+}
+
+/** Claves de settings que nunca deben llegar al navegador (tokens de integraciones). */
+const SECRET_SETTINGS = ['ig_token', 'pos_feed_token'];
+
+function public_settings(array $s): array
+{
+    foreach (SECRET_SETTINGS as $k) {
+        unset($s[$k]);
+    }
+    return $s;
 }
 
 function db(): PDO
