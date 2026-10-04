@@ -73,10 +73,55 @@ Ajustes nuevos en el panel: URL del POS, id de tienda, token (nunca vuelve al na
 
 Prueba: `pos_apply_menu()` se verificó sobre una copia de la base local con tres pasadas (actualizar precio único y presentaciones, agregar presentación, crear producto y categoría ocultos, bajar precio y ocultar, detectar huérfano).
 
+## 4b. Modelo de inventario del bar en angelo-pos
+
+El catálogo del sitio se carga en angelo-pos con `scripts/import-from-sarao.ts` (ver §5) usando este modelo:
+
+| Tipo | Inventario | Productos vendibles | Fuente de costo y stock |
+|---|---|---|---|
+| Licores por trago / media / botella (Ron, Aguardiente, Tequila, Whisky, Ginebra) | **1 ingrediente por marca en ml**, con `pack_size` = ml de la botella (750; 700 si el nombre lo dice) | Trago = 45 ml · Media = 375 ml (o lo que diga el detalle: 350, 500) · Botella = ml de la botella · Combo media/botella = ml + 4 Andina | Pirpos: `pricePurchase` de la presentación Botella ÷ ml; stock = botellas × ml + medias × 375 |
+| Cervezas con presentaciones | **1 ingrediente por marca en unidades** | Botella = 1 · Michelada = 1 · Cubeta = 6 | Pirpos: costo y stock de la presentación "botella" (las de cubeta/promo son contadores duplicados y se ignoran) |
+| Precio único (gaseosas, aguas, vinos por botella, Smirnoff, Jack Daniel's) | **Producto inventariable** por unidad | el mismo producto | Pirpos: `avgCost`/`pricePurchase` y `stock` del producto |
+| Cubeta Andina + ½ Antioqueño / Néctar | — | producto con receta: 6 Andina + 375 ml del aguardiente | — |
+| Cócteles | — | producto sin receta (Pirpos no trae ingredientes); costo manual 0 hasta cargar la receta | — |
+| Adicionales, Decoración | — | producto sin inventario ni costo | — |
+
+Supuestos que conviene validar en el POS después de importar: trago = 45 ml, cubeta = 6 cervezas, combo = 4 Andina. Los tragos de Pirpos tenían stock negativo porque nadie los ataba a la botella; en angelo-pos el trigger `apply_sale_to_stock` descuenta los ml del ingrediente al registrar la venta.
+
+## 4c. Promociones
+
+angelo-pos gana el módulo **Promociones** (`/promociones`, tablas `promotions` + `promotion_scopes`, migración 0005):
+
+- Tipos: `percent_off` (% sobre el precio de lista), `fixed_price` (precio por unidad; 0 = gratis) y `bundle` ("N por $X").
+- Cuándo: días ISO (vacío = todos), franja horaria (puede cruzar medianoche), vigencia por fechas, activa/pausada.
+- Alcance: productos puntuales (presentaciones) y/o categorías completas.
+- Ventas: `daily_sale_items.promotion_id` registra la promo aplicada; `unit_price` ya es el precio promocional. Un producto puede venderse normal y en promo el mismo día.
+- Lógica pura en `lib/domain/promotions.ts` (vigencia, precio unitario, total de paquete, etiquetas), con tests.
+
+**Una promoción nunca regala.** Precio 0 y 100 % de descuento están prohibidos (restricción `chk_promotion_not_free` en base de datos, validación en servidor y aviso en pantalla). Lo gratis se registra en **Cortesías y consumo interno** (`/consumos`, tabla `consumptions`, migración 0006):
+
+- `courtesy` (se regala a un cliente; exige quién autoriza) e `internal` (lo consume el equipo), por producto con receta o por ingrediente/botella, con cantidad, motivo, destinatario y fecha.
+- Descuenta inventario con la misma expansión de receta que las ventas (`consume_product_stock`, compartida ahora con el trigger de ventas). Borrar un registro repone el stock.
+- **Se contabiliza a costo, nunca a precio de venta:** `unit_cost` se congela al registrar (costo de receta del producto o costo del ingrediente) y `total_cost` es generado. No entra en `venta_total`; el dashboard operativo por rango lo muestra aparte (`cortesias_costo`, `consumo_interno_costo`) y el balance de inventario lo cuenta en el consumo de 30 días.
+
+El importador convierte las presentaciones promocionales del sitio en promociones reales: "Promo 50 %" (miércoles, botellas de 8 cervezas) → `percent_off 50`; "Cubeta al 50 %" (jueves, Heineken y Andina) → `percent_off 50`; "Cócteles 2×40" (mié a sáb, 6 a 10 p. m.) → `bundle 40000 × 2` sobre los 8 cócteles (Gin Tonic, Margarita Red y Mojito Sarao se crean ocultos a 30.000 porque no tenían precio individual). "Cubeta gratis" **no** se importa: queda mencionada en la descripción de "Jueves de cubetas" y cada cubeta regalada se registra como cortesía cuando ocurre.
+
+El feed publica `promotions[]`, y la sincronización del sitio:
+1. Hace upsert en la tabla `promotions` de Sarao (título, detalle, días, horario) enlazando por `pos_promotion_id`; borra las del POS que desaparecen; no toca las creadas a mano en el panel.
+2. **Materializa** presentaciones promocionales ("Promo 50 %", "Cubeta al 50 %", "Cubeta gratis") en los productos con presentaciones enlazadas, con la nota del día, marcadas `pos_product_id = promo:<promo>:<producto>`. Así la carta se ve exactamente como hoy sin tocar su render. Las que dejan de aplicar se borran.
+3. Los paquetes y las promos sobre productos de precio único solo van a la franja "Promos de la semana".
+
 ## 5. Puesta en marcha
 
 1. **angelo-pos:** definir `MENU_FEED_TOKEN` en el entorno de producción y `NEXT_PUBLIC_APP_NAME="El Sarao Pub"`. Desplegar. Aplicar `drizzle/0004_hardening.sql` (`npx drizzle-kit migrate`).
-2. **Catálogo inicial en el POS:** cargar las 14 categorías y 54 productos del bar en angelo-pos. Fuente recomendada: el export de Pirpos (`tools/pirpos-menu.json`, no versionado) que ya trae costos y stock, que el sitio no tiene. Un producto del sitio con presentaciones se carga como N productos POS con el mismo nombre y `size` = etiqueta de la presentación.
+2. **Catálogo inicial en el POS** (dos comandos):
+   ```bash
+   # en Sarao: exporta categorías, productos, presentaciones y promos del sitio
+   php -d extension=pdo_sqlite tools/export_catalog.php > catalogo-sarao.json
+   # en angelo-pos: primero --dry-run (escribe scripts/out/import-plan.json), luego sin él
+   npx tsx scripts/import-from-sarao.ts --catalog catalogo-sarao.json --pirpos ../Sarao/tools/pirpos-menu.json --store "El Sarao Pub" --dry-run
+   ```
+   Resultado con los datos actuales: 14 categorías, 25 ingredientes (24 con costo), 102 productos (73 con receta, 17 inventariables), 4 promociones. Es idempotente: lo que ya exista por nombre se salta.
 3. **Sarao:** subir los archivos cambiados, abrir el panel (aplica las columnas nuevas), Ajustes → "Precios desde el POS": URL, id de tienda, token. Guardar y "Sincronizar ahora". Revisar en Productos los que quedaron ocultos.
 4. A partir de ahí, **los precios se cambian solo en angelo-pos**. El sitio los recibe en menos de una hora o al pulsar "Sincronizar ahora".
 

@@ -280,6 +280,11 @@ function pos_apply_menu(array $feed, ?int $adminId = null): array
             }
         }
 
+        // Promociones: filas de la tabla promotions + presentaciones promocionales materializadas.
+        if (isset($feed['promotions']) && is_array($feed['promotions'])) {
+            $summary['promotions'] = pos_apply_promotions($pdo, $feed['promotions'], $feed['products'], $ts);
+        }
+
         if ($adminId !== null) {
             audit($adminId, 'sync', 'pos');
         }
@@ -289,6 +294,176 @@ function pos_apply_menu(array $feed, ?int $adminId = null): array
         throw $e;
     }
     return $summary;
+}
+
+/** Prefijo con el que se marcan las presentaciones promocionales que genera la sincronización. */
+const POS_PROMO_VARIANT_PREFIX = 'promo:';
+
+/** "Solo miércoles", "Mié a Sáb", "" (todos los días). */
+function pos_days_note(array $days): string
+{
+    $d = array_values(array_unique(array_filter(array_map('intval', $days), static fn ($x) => $x >= 1 && $x <= 7)));
+    sort($d);
+    if (!$d || count($d) === 7) {
+        return '';
+    }
+    if (count($d) === 1) {
+        return 'Solo ' . mb_strtolower(WEEKDAYS[$d[0]]);
+    }
+    return format_days(implode(',', $d));
+}
+
+/** Precio promocional por unidad según el tipo de promoción del POS. */
+function pos_promo_price(array $promo, int $base): int
+{
+    return match ((string) $promo['kind']) {
+        'percent_off' => (int) round($base * (1 - ((float) $promo['value']) / 100)),
+        'fixed_price' => (int) round((float) $promo['value']),
+        'bundle' => (int) round(((float) $promo['value']) / max(2, (int) ($promo['bundle_qty'] ?? 2))),
+        default => $base,
+    };
+}
+
+/** Etiqueta de la presentación promocional, en el estilo que ya usa la carta. */
+function pos_promo_label(array $promo, string $baseLabel): string
+{
+    $v = (float) $promo['value'];
+    $pct = $v == (int) $v ? (string) (int) $v : number_format($v, 1, ',', '');
+    return match ((string) $promo['kind']) {
+        'percent_off' => mb_strtolower($baseLabel) === 'botella' ? "Promo $pct %" : "$baseLabel al $pct %",
+        'fixed_price' => $v == 0.0 ? "$baseLabel gratis" : (string) $promo['name'],
+        'bundle' => (int) ($promo['bundle_qty'] ?? 2) . ' por ' . money((int) round($v)),
+        default => (string) $promo['name'],
+    };
+}
+
+/**
+ * Aplica las promociones del feed:
+ *  1. Upsert en `promotions` (título, detalle, días, horario) enlazado por pos_promotion_id;
+ *     las creadas a mano en el panel (pos_promotion_id NULL) no se tocan; las del POS que
+ *     desaparecen se borran.
+ *  2. Materializa presentaciones promocionales ("Promo 50 %", "Cubeta al 50 %", "Cubeta gratis")
+ *     en los productos que ya tienen presentaciones enlazadas al POS, con la nota del día.
+ *     Marcadas con pos_product_id = "promo:<promo>:<producto>"; las que ya no aplican se borran.
+ *  Los paquetes ("2 por $40.000") y las promos sobre productos de precio único solo van a la
+ *  tabla promotions (la carta los muestra en la franja "Promos de la semana").
+ */
+function pos_apply_promotions(PDO $pdo, array $promos, array $feedProducts, string $ts): array
+{
+    $out = ['upserted' => 0, 'removed' => 0, 'variants' => 0, 'variants_removed' => 0];
+
+    // --- 1) tabla promotions ---
+    $existing = $pdo->query('SELECT id, pos_promotion_id, sort_order FROM promotions WHERE pos_promotion_id IS NOT NULL')->fetchAll();
+    $byPos = [];
+    foreach ($existing as $e) {
+        $byPos[$e['pos_promotion_id']] = $e;
+    }
+    $ins = $pdo->prepare('INSERT INTO promotions (title, detail, days, time_from, time_to, is_active, sort_order, created_at, updated_at, pos_promotion_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $upd = $pdo->prepare('UPDATE promotions SET title = ?, detail = ?, days = ?, time_from = ?, time_to = ?, is_active = ?, updated_at = ? WHERE id = ?');
+    $maxOrder = (int) $pdo->query('SELECT COALESCE(MAX(sort_order), 0) FROM promotions')->fetchColumn();
+    $seen = [];
+    foreach ($promos as $pr) {
+        $pid = (string) ($pr['id'] ?? '');
+        if ($pid === '' || empty($pr['name'])) {
+            continue;
+        }
+        $seen[$pid] = true;
+        $days = array_values(array_filter(array_map('intval', (array) ($pr['days'] ?? [])), static fn ($d) => $d >= 1 && $d <= 7));
+        sort($days);
+        // La carta exige al menos un día: "todos los días" se guarda como 1..7.
+        $daysCsv = implode(',', $days ?: range(1, 7));
+        $detail = trim((string) ($pr['description'] ?? ''));
+        if ($detail === '') {
+            $detail = match ((string) $pr['kind']) {
+                'percent_off' => number_format((float) $pr['value'], 0, ',', '.') . ' % de descuento.',
+                'bundle' => (int) ($pr['bundle_qty'] ?? 2) . ' por ' . money((int) round((float) $pr['value'])) . '.',
+                default => '',
+            };
+        }
+        $active = !empty($pr['is_active']) ? 1 : 0;
+        $from = preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) ($pr['time_from'] ?? '')) ? $pr['time_from'] : null;
+        $to = preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) ($pr['time_to'] ?? '')) ? $pr['time_to'] : null;
+        if (isset($byPos[$pid])) {
+            $upd->execute([mb_substr((string) $pr['name'], 0, 80), mb_substr($detail, 0, 255) ?: null, $daysCsv, $from, $to, $active, $ts, (int) $byPos[$pid]['id']]);
+        } else {
+            $maxOrder += 10;
+            $ins->execute([mb_substr((string) $pr['name'], 0, 80), mb_substr($detail, 0, 255) ?: null, $daysCsv, $from, $to, $active, $maxOrder, $ts, $ts, $pid]);
+        }
+        $out['upserted']++;
+    }
+    $del = $pdo->prepare('DELETE FROM promotions WHERE id = ?');
+    foreach ($byPos as $pid => $e) {
+        if (!isset($seen[$pid])) {
+            $del->execute([(int) $e['id']]);
+            $out['removed']++;
+        }
+    }
+
+    // --- 2) presentaciones promocionales ---
+    $catByPosId = [];
+    foreach ($feedProducts as $fp) {
+        if (!empty($fp['id'])) {
+            $catByPosId[(string) $fp['id']] = pos_norm((string) ($fp['category'] ?? ''));
+        }
+    }
+    $vars = $pdo->query('SELECT id, product_id, label, price, is_active, sort_order, pos_product_id FROM product_variants WHERE pos_product_id IS NOT NULL')->fetchAll();
+    $baseByPos = [];
+    $promoVarByKey = [];
+    foreach ($vars as $v) {
+        if (str_starts_with((string) $v['pos_product_id'], POS_PROMO_VARIANT_PREFIX)) {
+            $promoVarByKey[$v['pos_product_id']] = $v;
+        } else {
+            $baseByPos[$v['pos_product_id']] = $v;
+        }
+    }
+    $insVar = $pdo->prepare('INSERT INTO product_variants (product_id, label, detail, note, price, sort_order, is_active, pos_product_id, pos_synced_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)');
+    $updVar = $pdo->prepare('UPDATE product_variants SET label = ?, note = ?, price = ?, is_active = ?, pos_synced_at = ? WHERE id = ?');
+    $keep = [];
+    foreach ($promos as $pr) {
+        $pid = (string) ($pr['id'] ?? '');
+        if ($pid === '' || ($pr['kind'] ?? '') === 'bundle') {
+            continue;
+        }
+        $targets = array_map('strval', (array) ($pr['product_ids'] ?? []));
+        foreach ((array) ($pr['categories'] ?? []) as $cat) {
+            $cn = pos_norm((string) $cat);
+            foreach ($catByPosId as $posId => $pc) {
+                if ($pc === $cn) {
+                    $targets[] = $posId;
+                }
+            }
+        }
+        $note = pos_days_note((array) ($pr['days'] ?? []));
+        foreach (array_unique($targets) as $posId) {
+            $base = $baseByPos[$posId] ?? null;
+            if (!$base) {
+                continue; // precio único o no enlazado: la franja de promos lo cubre
+            }
+            $key = POS_PROMO_VARIANT_PREFIX . $pid . ':' . $posId;
+            $keep[$key] = true;
+            $label = mb_substr(pos_promo_label($pr, (string) $base['label']), 0, 60);
+            $price = pos_promo_price($pr, (int) $base['price']);
+            $active = (!empty($pr['is_active']) && (int) $base['is_active'] === 1) ? 1 : 0;
+            if (isset($promoVarByKey[$key])) {
+                $pv = $promoVarByKey[$key];
+                if ($pv['label'] !== $label || (int) $pv['price'] !== $price || (int) $pv['is_active'] !== $active) {
+                    $updVar->execute([$label, $note ?: null, $price, $active, $ts, (int) $pv['id']]);
+                    $out['variants']++;
+                }
+            } else {
+                $insVar->execute([(int) $base['product_id'], $label, $note ?: null, $price, (int) $base['sort_order'] + 1, $active, $key, $ts]);
+                $out['variants']++;
+            }
+        }
+    }
+    $delVar = $pdo->prepare('DELETE FROM product_variants WHERE id = ?');
+    foreach ($promoVarByKey as $key => $pv) {
+        if (!isset($keep[$key])) {
+            $delVar->execute([(int) $pv['id']]);
+            $out['variants_removed']++;
+        }
+    }
+    return $out;
 }
 
 /** Descarga + aplica. Guarda estado en settings. */

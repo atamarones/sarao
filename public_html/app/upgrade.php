@@ -32,6 +32,8 @@ function run_upgrades(PDO $pdo, string $driver): array
         ['products', 'pos_synced_at', 'DATETIME NULL'],
         ['product_variants', 'pos_product_id', 'VARCHAR(36) NULL'],
         ['product_variants', 'pos_synced_at', 'DATETIME NULL'],
+        // Promociones que vienen del POS (las creadas a mano en el panel quedan con NULL).
+        ['promotions', 'pos_promotion_id', 'VARCHAR(36) NULL'],
     ];
     foreach ($cols as [$table, $col, $type]) {
         if (!column_exists($pdo, $driver, $table, $col)) {
@@ -40,7 +42,7 @@ function run_upgrades(PDO $pdo, string $driver): array
             $applied[] = $sql;
         }
     }
-    foreach (['CREATE INDEX idx_products_pos ON products (pos_product_id)', 'CREATE INDEX idx_variants_pos ON product_variants (pos_product_id)'] as $sql) {
+    foreach (['CREATE INDEX idx_products_pos ON products (pos_product_id)', 'CREATE INDEX idx_variants_pos ON product_variants (pos_product_id)', 'CREATE INDEX idx_promotions_pos ON promotions (pos_promotion_id)'] as $sql) {
         try {
             $pdo->exec($sql);
             $applied[] = $sql;
