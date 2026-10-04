@@ -715,7 +715,7 @@
           <p class="hint">Conecta el sistema operativo (angelo-pos). Los precios y productos nuevos llegan solos cada hora; aquí decides foto, descripción y qué se muestra.</p>
           <div class="two">${field('pos_feed_url', 'URL del POS', { attrs: 'maxlength="200" inputmode="url" placeholder="https://pos.saraopub.com"', opt: true })}${field('pos_store_id', 'Id de la tienda en el POS', { attrs: 'maxlength="36" placeholder="uuid de la tienda"', opt: true })}</div>
           <label>Token del feed <span class="opt">opcional</span><input name="pos_feed_token" type="password" autocomplete="off" maxlength="200" placeholder="${pos.token_set ? 'Guardado. Escribe uno nuevo para reemplazarlo.' : 'MENU_FEED_TOKEN del POS'}"><span class="hint">No se vuelve a mostrar. Déjalo vacío para conservar el actual.</span></label>
-          <p class="hint" id="pos-status">${posStatusText(pos)}</p>
+          <p class="hint" id="pos-status">${esc(posStatusText(pos))}</p>
           <div><button class="btn btn-ghost" type="button" id="pos-sync" ${pos.configured ? '' : 'disabled'}>Sincronizar ahora</button></div>
         </section>
         <div class="sticky-save"><button class="btn btn-primary" type="submit">Guardar ajustes</button></div>
