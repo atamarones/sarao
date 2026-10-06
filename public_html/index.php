@@ -23,7 +23,7 @@ $reserve = (string) $s['reservation_url'];
 $wa = preg_replace('/\D+/', '', (string) $s['whatsapp']);
 $ig = ltrim((string) $s['instagram'], '@');
 $tt = ltrim((string) $s['tiktok'], '@');
-$songs = trim((string) $s['songs_count']) ?: '8.000';
+$songs = trim((string) $s['songs_count']) ?: '90.000';
 
 $featured = db()->query('SELECT p.id, p.name, p.price, p.image, c.name AS category,
         (SELECT MIN(v.price) FROM product_variants v WHERE v.product_id = p.id AND v.is_active = 1 AND v.price > 0) AS from_price

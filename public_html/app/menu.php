@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS = [
     'email' => 'saraopub@gmail.com',
     'reservation_url' => 'https://aima-n8n.yau1cn.easypanel.host/form/637e1a7f-f598-4824-b67e-a1c39c26953c',
     'reviews_url' => 'https://www.google.com/maps/place/El+Sarao+Pub+-+Karaoke+Bar/@4.6032742,-74.0707668,17z/data=!4m8!3m7!1s0x8e3f99a8c8d17093:0x8f560dbc46b46a00!8m2!3d4.6032742!4d-74.0707668!9m1!1b1',
-    'songs_count' => '8.000',
+    'songs_count' => '90.000',
     'website' => 'https://saraopub.com/',
     'maps_url' => 'https://maps.google.com/?q=4.603288,-74.070768',
     'notice' => '',

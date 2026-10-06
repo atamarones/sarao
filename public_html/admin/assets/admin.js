@@ -697,7 +697,7 @@
           <div class="two">${field('whatsapp', 'WhatsApp', { attrs: 'maxlength="20" inputmode="tel"', hint: 'Con indicativo, sin espacios: 573163936616', opt: true })}${field('instagram', 'Instagram', { attrs: 'maxlength="40"', hint: 'Usuario sin @', opt: true })}</div>
           <div class="two">${field('website', 'Sitio web', { attrs: 'maxlength="200" inputmode="url"', opt: true })}${field('maps_url', 'Enlace de Google Maps', { attrs: 'maxlength="300" inputmode="url"', opt: true })}</div>
           <div class="two">${field('tiktok', 'TikTok', { attrs: 'maxlength="40"', hint: 'Usuario sin @', opt: true })}${field('facebook', 'Facebook', { attrs: 'maxlength="300" inputmode="url"', opt: true })}</div>
-          <div class="two">${field('email', 'Correo', { attrs: 'maxlength="120" inputmode="email"', opt: true })}${field('songs_count', 'Canciones en catálogo', { attrs: 'maxlength="12"', hint: 'Se muestra como «+8.000 canciones».' })}</div>
+          <div class="two">${field('email', 'Correo', { attrs: 'maxlength="120" inputmode="email"', opt: true })}${field('songs_count', 'Canciones en catálogo', { attrs: 'maxlength="12"', hint: 'Se muestra como «+90.000 canciones».' })}</div>
         </section>
         <section class="card stack">
           <h2 class="card-title">Reservas y reseñas</h2>
