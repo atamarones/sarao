@@ -3,6 +3,7 @@
 - **Sitio** (`/`): home de karaoke con hero de fotos reales, letra de karaoke animada, rocola «¿Qué cantas hoy?», medidor de voz con el micrófono, semana con horarios y promos, galería, celebraciones, testimonios y cómo llegar. Todos los botones «Reservar» van al formulario de reservas configurado en el panel.
 - **Carta** (`/carta/`): para el QR de las mesas.
 - **Panel** (`/admin/`): CRUD de productos, categorías, promos, testimonios y ajustes. Lo que cambies aquí se ve al instante en el sitio y en la carta.
+- **Karaoke por mesa** (`/karaoke/`): cada mesa escanea su QR, escribe el código de la noche y pide canciones desde el celular. Un agente en el PC del bar las pone en KaraFun (ver [Karaoke por mesa](#karaoke-por-mesa)).
 
 - **Stack:** PHP 8.1+ y MySQL/MariaDB. Sin Node, sin compilación y sin dependencias externas. Corre en cualquier plan de hosting compartido de Hostinger.
 - **Contenido inicial:** 14 categorías, 54 productos, 94 presentaciones y 3 promos, importados del menú actual de Pirpos. Las 54 fotos están optimizadas en WebP; las 2 cubetas combo, que no tenían foto, llevan una imagen compuesta con las fotos reales de sus botellas.
@@ -13,11 +14,14 @@
 public_html/            ← todo esto se sube a public_html en Hostinger
   index.php             home del sitio
   carta/index.php       carta pública (QR)
+  karaoke/              página de mesa (index.php + api.php) y API del agente del bar (agent.php)
   install.php           instalador de un solo uso (bórralo después de instalar)
   admin/                panel (index.php, api.php, logout.php, assets/)
   app/                  núcleo, esquema de BD y seed.json (bloqueado por .htaccess)
   assets/               CSS, JS, fotos del local (img/site), logo y librerías (vendor: GSAP, ScrollTrigger, Lenis)
   uploads/products/     fotos de productos (no ejecuta scripts)
+tools/test_karaoke.php  pruebas de la lógica del karaoke (SQLite en memoria, o MySQL de pruebas)
+tools/fake_agent.php    simulador del agente del PC del bar para probar punta a punta
 tools/build_seed.php    regenera seed.json e imágenes desde el export de Pirpos (solo en local;
                         requiere tools/pirpos-menu.json, que no se versiona)
 ```
@@ -56,6 +60,7 @@ La carta muestra «Abierto · hasta las 3 a. m.» o «Cerrado · abre hoy a las 
 - Cada foto subida se valida por contenido y se vuelve a codificar a WebP, lo que elimina metadatos y cualquier código incrustado. `uploads/` no ejecuta scripts.
 - `app/` (configuración con credenciales) está bloqueada desde el navegador.
 - Registro de auditoría (`audit_log`): quién creó, editó o borró qué y cuándo.
+- Karaoke: la API del agente exige token Bearer de 64 hex (comparación en tiempo constante, solo HTTPS); el token nunca vuelve al navegador. Las mesas entran con el token del QR más el código de la noche (10 intentos fallidos por 10 min bloquean). Nombres de cantante y títulos se pintan como texto, nunca como HTML. Para los límites por celular se guarda una huella HMAC de la IP, no la IP.
 
 ## Precios desde el POS (angelo-pos)
 
@@ -70,6 +75,44 @@ php -d extension=pdo_sqlite -S 127.0.0.1:8000
 ```
 
 Abre http://127.0.0.1:8000 (sitio), http://127.0.0.1:8000/carta/ (carta) y http://127.0.0.1:8000/admin/ (panel). No subas `app/config.php` ni la carpeta `database/` al servidor: el instalador genera la configuración de producción.
+
+## Karaoke por mesa
+
+Diseño completo en `docs/karaoke-arquitectura.md`; el acuerdo con el agente del PC del bar, en `docs/karaoke-contrato-agente.md` (versión 1.1). La nube guarda los pedidos y decide el orden; el agente (lo construye otra persona según el contrato) solo ejecuta órdenes en KaraFun Player 2.
+
+### Instalación
+
+1. Sube los archivos como siempre (incluida la carpeta `karaoke/` con su `.htaccess`, que deja pasar la cabecera `Authorization` del agente en Hostinger).
+2. Abre el panel: al cargar crea solas las tablas `karaoke_*` (también en una base instalada antes de esta versión). En una instalación nueva las crea `install.php`.
+3. Panel → **Karaoke** → **Generar token nuevo**. Cópialo en la configuración del agente: se muestra una sola vez. El agente llama a `https://tu-dominio/karaoke/agent.php?action=…` con `Authorization: Bearer <token>`.
+4. Opcional, para que las mesas encuentren el catálogo en línea de KaraFun: **Importar CSV de KaraFun** con el archivo que exporta KaraFun (`Id;Title;Artist;…`, unas 90 mil canciones, ~1 minuto). Si Hostinger rechaza el archivo por tamaño, sube `upload_max_filesize` y `post_max_size` a 16M en hPanel → Configuración de PHP.
+5. La comprobación de que un enlace de YouTube existe usa `curl` hacia `youtube.com` (activo por defecto en Hostinger). Si no responde, el pedido se acepta y el agente lo valida al descargar.
+
+### Uso en el bar
+
+| Paso | Dónde |
+|---|---|
+| Crear las mesas (número y nombre) e imprimir sus QR | Panel → Karaoke → Mesas → **Ver e imprimir QR** (o «Imprimir los QR de todas las mesas activas»). El QR no cambia al renombrar la mesa. |
+| Abrir la noche | **Abrir noche** genera un código de 4 números. Muéstralo en la pantalla del karaoke: sin él, un QR fotografiado no sirve desde la casa. La noche se cierra sola a las 14 h. |
+| Durante la noche | La pestaña se actualiza cada 5 s: lo que está en KaraFun, la lista de espera (flechas para adelantar o atrasar, **Cancelar**), los fallidos con su motivo, el estado del agente y cuántas canciones hay en «Por aprobar». |
+| Si el código se filtra | **Cambiar código**: los celulares lo vuelven a pedir. |
+| Al terminar | **Cerrar noche**: se cancelan los pedidos que esperaban; lo que ya está en KaraFun sigue sonando. |
+
+Las mesas buscan por canción o artista (primero la carpeta local del bar, luego el catálogo en línea de KaraFun), piden con el nombre de quien canta y ven su turno estimado. Si la canción no está, pegan un enlace de YouTube: solo se acepta un enlace de video (`youtube.com/watch?v=`, `youtu.be/`, `/shorts/`), nunca texto libre. Límites por defecto, editables en el panel: 3 canciones esperando por mesa, 4 pedidos por minuto por mesa y 6 por celular. KaraFun recibe como mucho la canción que suena y 2 más; la rotación entre mesas vive en la nube.
+
+### Probar el karaoke en local
+
+```bash
+php -d extension=pdo_sqlite tools/test_karaoke.php        # lógica completa sobre SQLite en memoria
+# Opcional, sobre una base MySQL/MariaDB DE PRUEBAS (borra sus tablas):
+# KARAOKE_TEST_DSN="mysql:host=127.0.0.1;port=3306;dbname=pruebas" KARAOKE_TEST_USER=root KARAOKE_TEST_PASS=… php tools/test_karaoke.php
+
+cd public_html && php -d extension=pdo_sqlite -S 127.0.0.1:8000     # servidor local (ver «Probar en local»)
+# En el panel local: Karaoke → crear mesas, Abrir noche y Generar token. Luego, en otra terminal:
+php tools/fake_agent.php --url=http://127.0.0.1:8000 --token=<token> --catalog=300 --seconds=120 --song-seconds=15
+```
+
+Abre el enlace del QR de una mesa (`/karaoke/?m=…`), escribe el código de la noche y pide canciones: el simulador las pone en su KaraFun de mentira, las «canta» y el panel muestra los cambios. `--drop-ack-once` simula que el agente se cae antes de confirmar una orden y `--fail-download=<id>` hace fallar una descarga de YouTube.
 
 ## Copias de seguridad
 

@@ -49,11 +49,29 @@ function section(string $name): void
     echo "· $name\n";
 }
 
+/**
+ * Base limpia. Por defecto SQLite en memoria; con KARAOKE_TEST_DSN (y KARAOKE_TEST_USER/PASS) corre
+ * sobre MySQL/MariaDB de pruebas: BORRA y recrea todas las tablas de esa base, nunca la apuntes a producción.
+ */
 function fresh_db(): PDO
 {
-    $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
-    $pdo->exec('PRAGMA foreign_keys = ON');
-    foreach (schema_statements('sqlite') as $sql) {
+    $opts = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false];
+    $dsn = getenv('KARAOKE_TEST_DSN');
+    if (!$dsn) {
+        $pdo = new PDO('sqlite::memory:', null, null, $opts);
+        $pdo->exec('PRAGMA foreign_keys = ON');
+        foreach (schema_statements('sqlite') as $sql) {
+            $pdo->exec($sql);
+        }
+        return $pdo;
+    }
+    $pdo = new PDO($dsn, getenv('KARAOKE_TEST_USER') ?: null, getenv('KARAOKE_TEST_PASS') ?: null, $opts);
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    foreach ($pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $t) {
+        $pdo->exec("DROP TABLE `$t`");
+    }
+    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+    foreach (schema_statements('mysql') as $sql) {
         $pdo->exec($sql);
     }
     return $pdo;

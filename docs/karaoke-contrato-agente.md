@@ -81,7 +81,6 @@ El catálogo en línea (~90 mil canciones, ids positivos y estables) **no lo sub
 
 Cambios de la v1.1 (aditivos: un agente v1 sigue funcionando con las canciones locales): `enqueue.payload.song` lleva `source` siempre y `kf_id` cuando `source = "karafun"`.
 
-
 | type | payload | qué hace el agente | `result` en el ack |
 |---|---|---|---|
 | `download` | `request_id`, `youtube_id`, `max_duration_s` (480) | Comprueba metadatos con yt-dlp (no directos, duración ≤ máximo), descarga mp4 ≤ 720p a `Música\Karaoke\Por aprobar\Artista - Título [youtube_id].mp4`, hace que KaraFun lo vea y sube la canción con `song.upsert` | `{ youtube_id, song: {…} }` |
@@ -94,6 +93,8 @@ Reglas:
 - El `singer` lleva un marcador único corto del pedido (`Ana · M7·k3f` = nombre, mesa 7, 3 caracteres del id) para que el agente reconcilie si se cae a mitad de una orden.
 - El agente nunca recibe la URL que escribió el cliente, solo el `youtube_id` ya validado.
 - Una orden con el mismo `id` nunca se ejecuta dos veces: el agente guarda un diario local de ids ejecutados.
+- La nube no reentrega una orden que ya no hace falta, aunque su lease venza sin `ack`: un `enqueue` cuyo pedido ya apareció en la cola real (el agente lo añadió y se cayó antes de confirmar), una descarga que ya nadie espera o un `remove` de algo que ya no está. Un `ack` tardío de esas órdenes responde `200` con `duplicate: true`.
+- Toda orden recibida en un `poll` queda arrendada 30 s: el agente debe ejecutar (o confirmar) todas las que recibe, también en el primer `poll` tras arrancar.
 
 ## 4. Lo que la nube no debe asumir
 

@@ -1,6 +1,6 @@
 # Karaoke por mesa · arquitectura
 
-**Fecha:** 2026-10-06 · **Estado:** diseño con decisiones tomadas; comprobaciones en el PC del bar casi completas (§14). Nada implementado todavía.
+**Fecha:** 2026-10-06 · **Estado:** parte en la nube implementada (página de mesa, panel, API del agente; ver §15). Falta el agente del PC del bar; comprobaciones en el PC casi completas (§14).
 
 **Decisiones del negocio (2026-10-06):**
 - Se sigue con **KaraFun Player 2** (2.6.2), no con KaraFun 3: es el único con API local verificada.
@@ -206,3 +206,21 @@ Las horas siempre las pone el servidor (hora de Bogotá), nunca el celular ni el
 Otros hallazgos: 4 mp4 dañados de menos de 50 bytes (`Corregir\Kaleth Morales - Destrozaste Mi Alma.mp4`, `G\Guayacan Orquesta - Cada dia que pasa.mp4`, `M\Maluma - ADMV.mp4` y uno en `Repetidos`). La carpeta `Descargas` ya no tiene videos; su índice en KaraFun quedó vacío.
 
 Herramientas de prueba en `tools/karafun/`: `kfws.ps1` (consola de órdenes), `kf-call.ps1` (una orden, guarda la respuesta), `kf-dump-list.ps1` (exporta un catálogo a CSV), `kf-dismiss-frozen.ps1` (pulsa OK en el aviso de congelado).
+
+## 15. Decisiones de la implementación en la nube (2026-10-06)
+
+Lo que se decidió al construir la nube y no estaba arriba, o cambió:
+
+- **Rutas.** La API del agente es la del contrato: `POST /karaoke/agent.php?action=…` (no `/karaoke/api/agent/…`). La página de mesa es `/karaoke/?m=<token>` en vez de `/karaoke/m/<token>`: funciona sin reglas de reescritura, igual en Hostinger que con `php -S`. Es lo que lleva el QR.
+- **`natural_key`.** Duración en segundos exactos, sin redondear a 5 s (vale el ejemplo del contrato; regla completa en el contrato §2). La nube guarda la clave del agente sin recalcularla, y avisa en `warnings` si no coincide con la regla.
+- **Catálogo en línea de KaraFun (contrato v1.1).** Se importa desde el panel con el CSV que exporta KaraFun: `source = karafun`, `kf_id` (estable en línea) y `natural_key = karafun:<kf_id>` (en ese catálogo hay versiones con igual artista y título). El orden del CSV (de más a menos cantada) se guarda como `popularity` y desempata la búsqueda. El `enqueue` lleva `source` y, para estas, `kf_id`, que la mesa nunca ve.
+- **Búsqueda rápida.** `karaoke_song_words` indexa cada palabra normalizada de artista y título. La palabra más larga de la consulta se busca por prefijo (un rango en el índice, no un recorrido de la tabla) y las demás filtran ese grupo. Con 89.628 canciones: mediana de 3–16 ms y peor caso ~150 ms (palabras muy comunes de 2 letras), en MariaDB 10.11 y SQLite. Primero lo local, luego lo más cantado.
+- **Tablas y columnas añadidas a §5.** `karaoke_song_words`; `karaoke_catalog_syncs`, `karaoke_catalog_chunks` y `karaoke_catalog_staging` (sincronización por lotes); `karaoke_rate_events` (límites). `karaoke_tables.number` es el número impreso, el del marcador `M7`. `karaoke_requests` añade `marker`, `sent_at` y `acked_at`; `karaoke_songs` añade `file` y `popularity`.
+- **Noche.** Código de 4 cifras; la noche caduca sola a las 14 h. «Cambiar código» conserva la noche. Cerrar la noche cancela (actor `sistema`) lo que no llegó a KaraFun.
+- **Cola justa.** `fair_seq = ronda × 10⁶ + llegada`. El pedido nuevo de una mesa va a la ronda siguiente a la última suya, pero nunca antes de la ronda que se está cantando. Así, una mesa que llega tarde canta antes que el segundo turno de las demás. Reordenar en el panel intercambia el `fair_seq` con el vecino.
+- **Buffer.** Al decidir un `enqueue` se cuentan las entradas reales de KaraFun (también las puestas a mano) más los pedidos `enviado` que KaraFun aún no muestra, para no pasarse de 3. Un `enviado` confirmado que no aparece en la cola en 90 s pasa a `fallido` con motivo.
+- **Cola real → estados.** Un pedido en `cantando` que desaparece pasa a `cantada`. Uno en `en_cola` que desaparece pasa a `retirado` si algo que estaba delante sigue en la cola (lo quitaron a mano), y a `cantada` si no. Si el encargado vacía la cola entera, se ven como `cantada`.
+- **Órdenes que ya no hacen falta no se reentregan.** Un `enqueue` cuyo pedido ya apareció en la cola real (el agente se cayó antes de confirmar) queda `done` con `skipped`; reentregarlo la haría sonar dos veces si ya terminó. Lo mismo con una descarga que todas las mesas cancelaron y con un `remove` de algo que ya no está.
+- **YouTube.** Un mismo video pedido por varias mesas se descarga una vez; uno ya descargado no se vuelve a bajar. El oEmbed rechaza 400/401/403/404 (no existe o es privado); si YouTube no responde, se acepta y decide el agente.
+- **Límites (§11).** Por defecto, editables en el panel: 3 pendientes por mesa, 4 pedidos por minuto por mesa y 6 por IP; 10 códigos equivocados en 10 min bloquean esa IP. La IP se guarda como huella HMAC con una sal en `settings` (`karaoke_salt`, secreta), nunca en claro. Cantante: máximo 30 caracteres, sin caracteres de control ni el separador `·`.
+- **Token del agente.** Se genera en el panel y se muestra una sola vez. Está en `SECRET_SETTINGS`, así que nunca vuelve al navegador.
