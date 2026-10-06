@@ -171,6 +171,7 @@ function karaoke_schema_statements(string $driver): array
             popularity INT NULL,
             folder VARCHAR(120) NULL,
             file VARCHAR(500) NULL,
+            youtube_id VARCHAR(11)$bin NULL,
             available $bool NOT NULL DEFAULT 1,
             seen_at DATETIME NOT NULL,
             created_at DATETIME NOT NULL,
@@ -211,6 +212,7 @@ function karaoke_schema_statements(string $driver): array
             status VARCHAR(12) NOT NULL,
             fair_seq $big NOT NULL,
             kf_queue_pos INT NULL,
+            singer_shown $bool NOT NULL DEFAULT 1,
             error VARCHAR(255) NULL,
             sent_at DATETIME NULL,
             acked_at DATETIME NULL,
@@ -261,6 +263,7 @@ function karaoke_schema_statements(string $driver): array
 
         "CREATE TABLE IF NOT EXISTS karaoke_catalog_syncs (
             id VARCHAR(32)$bin NOT NULL PRIMARY KEY,
+            source VARCHAR(10) NOT NULL DEFAULT 'local',
             status VARCHAR(10) NOT NULL,
             started_at DATETIME NOT NULL,
             committed_at DATETIME NULL,
@@ -286,7 +289,9 @@ function karaoke_schema_statements(string $driver): array
             artist VARCHAR(200) NOT NULL,
             duration_s INT NOT NULL,
             folder VARCHAR(120) NULL,
-            file VARCHAR(500) NULL
+            file VARCHAR(500) NULL,
+            kf_id INT NULL,
+            youtube_id VARCHAR(11)$bin NULL
         )$tail",
 
         "CREATE TABLE IF NOT EXISTS karaoke_rate_events (

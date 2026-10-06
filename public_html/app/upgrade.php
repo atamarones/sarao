@@ -71,6 +71,12 @@ function run_upgrades(PDO $pdo, string $driver): array
     // Karaoke: tablas nuevas primero (abajo); estas columnas llegaron después de la primera versión.
     $karaokeCols = [
         ['karaoke_songs', 'popularity', 'INT NULL'],
+        // Contrato v2.
+        ['karaoke_songs', 'youtube_id', 'VARCHAR(11)' . ($driver === 'mysql' ? ' CHARACTER SET ascii COLLATE ascii_bin' : '') . ' NULL'],
+        ['karaoke_requests', 'singer_shown', ($driver === 'mysql' ? 'TINYINT(1)' : 'INTEGER') . ' NOT NULL DEFAULT 1'],
+        ['karaoke_catalog_syncs', 'source', "VARCHAR(10) NOT NULL DEFAULT 'local'"],
+        ['karaoke_catalog_staging', 'kf_id', 'INT NULL'],
+        ['karaoke_catalog_staging', 'youtube_id', 'VARCHAR(11) NULL'],
     ];
     foreach ($cols as [$table, $col, $type]) {
         if (!column_exists($pdo, $driver, $table, $col)) {

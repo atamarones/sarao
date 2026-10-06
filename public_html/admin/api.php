@@ -266,7 +266,12 @@ function karaoke_state(): array
         $failed = $st->fetchAll();
     }
     $counts = $pdo->query('SELECT source, COUNT(*) AS n FROM karaoke_songs WHERE available = 1 GROUP BY source')->fetchAll(PDO::FETCH_KEY_PAIR);
-    $sync = $pdo->query("SELECT summary, committed_at FROM karaoke_catalog_syncs WHERE status = 'committed' ORDER BY committed_at DESC LIMIT 1")->fetch() ?: null;
+    $lastSync = static function (string $source) use ($pdo): ?array {
+        $st = $pdo->prepare("SELECT summary, committed_at FROM karaoke_catalog_syncs WHERE status = 'committed' AND source = ? ORDER BY committed_at DESC LIMIT 1");
+        $st->execute([$source]);
+        $r = $st->fetch();
+        return $r ? json_decode((string) $r['summary'], true) + ['at' => karaoke_iso($r['committed_at'])] : null;
+    };
     return [
         'night' => $night ? ['id' => (int) $night['id'], 'code' => $night['night_code'], 'opens_at' => karaoke_iso($night['opens_at'])] : null,
         'tables' => $tables,
@@ -278,7 +283,8 @@ function karaoke_state(): array
             'local' => (int) ($counts['local'] ?? 0),
             'karafun' => (int) ($counts['karafun'] ?? 0),
             'por_aprobar' => karaoke_count_por_aprobar($pdo),
-            'last_sync' => $sync ? json_decode((string) $sync['summary'], true) + ['at' => karaoke_iso($sync['committed_at'])] : null,
+            'last_sync' => $lastSync('local'),
+            'last_sync_karafun' => $lastSync('karafun'),
             'karafun_import' => json_decode(karaoke_setting($pdo, 'karaoke_karafun_import'), true) ?: null,
         ],
         'token_set' => karaoke_setting($pdo, 'karaoke_agent_token') !== '',
@@ -701,7 +707,11 @@ try {
             respond(['ok' => true, 'karaoke' => karaoke_state()]);
 
         case 'POST karaoke.catalog.resync':
-            karaoke_command_create($pdo, 'catalog.resync', []);
+            $source = (string) (input()['source'] ?? '');
+            if (!in_array($source, ['local', 'karafun'], true)) {
+                throw new ApiError('Fuente de catálogo no válida.');
+            }
+            karaoke_command_create($pdo, 'catalog.resync', ['source' => $source]);
             audit($aid, 'resync', 'karaoke_catalog');
             respond(['ok' => true, 'karaoke' => karaoke_state()]);
 

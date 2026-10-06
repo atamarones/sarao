@@ -1,6 +1,10 @@
 # Contrato nube ↔ agente del bar
 
-**Versión:** 1.1 · **Fecha:** 2026-10-06 · Complementa `docs/karaoke-arquitectura.md` (§8).
+**Versión:** 2 · **Fecha:** 2026-10-06 · Complementa `docs/karaoke-arquitectura.md` (§8).
+
+Cambios respecto a la versión 1: `natural_key` ya no incluye la duración; las canciones llevan `source` (`local` o `karafun`) y el catálogo en línea de KaraFun también se sincroniza; una canción descargada puede entrar a la cola sin cantante (`singer_shown: false`).
+
+**URL de producción del agente:** `https://karaoke.saraopub.com/karaoke/agent.php` (configurable en el agente si la ruta cambia).
 
 La nube (PHP en Hostinger) es la fuente de verdad. El agente (PC del bar) **solo hace peticiones salientes por HTTPS** y obedece órdenes. Este documento es el acuerdo entre las dos partes: si algo cambia aquí, cambia en ambos lados.
 
@@ -23,16 +27,19 @@ Petición:
   "karafun": { "running": true, "connected": true, "state": "playing",
                "queue": [ { "pos": 0, "title": "Caballero", "artist": "Alejandro Fernández",
                             "singer": "Ana · M7·k3f", "status": "playing" } ] },
+  "working": [813],
   "acks_pending": 0
 }
 ```
+- `working`: ids de órdenes que el agente tiene en marcha (una descarga tarda 10–60 s). La nube **extiende el lease 30 s** de cada una y no las reentrega mientras sigan apareciendo aquí.
+- `karafun.connected: false` o `running: false` significa que KaraFun no está disponible: la nube no debe emitir órdenes `enqueue`/`remove` hasta que vuelva.
 Respuesta:
 ```json
 {
   "server_time": "2026-10-06T21:15:00-05:00",
   "commands": [
     { "id": 812, "type": "enqueue", "lease_until": "2026-10-06T21:15:30-05:00",
-      "payload": { "request_id": "9f1c…", "song": { "natural_key": "…", "title": "…", "artist": "…", "duration_s": 228, "source": "local" },
+      "payload": { "request_id": "9f1c…", "song": { "natural_key": "…", "title": "…", "artist": "…", "duration_s": 228 },
                    "singer": "Ana · M7·k3f" } }
   ]
 }
@@ -49,29 +56,26 @@ Respuesta:
 - Idempotente: un segundo `ack` de la misma orden responde `200` sin cambiar nada.
 - `ok: false` con `retryable: true` vuelve la orden a `pending` (máx. 5 intentos); sin `retryable`, el pedido pasa a `fallido` con el mensaje, que la mesa ve.
 
-### `catalog.begin` / `catalog.chunk` / `catalog.commit` — catálogo de canciones locales
+### `catalog.begin` / `catalog.chunk` / `catalog.commit` — catálogo
 
-1. `catalog.begin` → `{ "sync_id": "…" }`
+1. `catalog.begin` con `{ "source": "local" }` o `{ "source": "karafun" }` → `{ "sync_id": "…" }`
 2. `catalog.chunk` con `{ "sync_id", "index": 0, "songs": [ … hasta 500 … ] }` (cada lote idempotente por `sync_id` + `index`)
-3. `catalog.commit` con `{ "sync_id", "total_chunks": 8, "total_songs": 3759 }` → la nube activa la versión nueva en una transacción. Las canciones que no vinieron pasan a `available = 0` (no se borran).
+3. `catalog.commit` con `{ "sync_id", "total_chunks": 8, "total_songs": 3759 }` → la nube activa la versión nueva **de esa fuente** en una transacción. Las canciones de esa fuente que no vinieron pasan a `available = 0` (no se borran).
+
+Las dos fuentes se sincronizan por separado: la local al arrancar el agente y cada noche (~4 min); la de KaraFun en línea con menos frecuencia, porque es mucho más grande.
 
 Canción:
 ```json
-{ "natural_key": "adriana lucia|quisiera olvidarte|187",
-  "title": "Quisiera olvidarte", "artist": "Adriana Lucia", "duration_s": 187,
-  "folder": "A", "file": "A/Adriana Lucia - Quisiera olvidarte.mp4" }
+{ "natural_key": "adriana lucia|quisiera olvidarte", "source": "local", "kf_id": null,
+  "title": "Quisiera olvidarte", "artist": "Adriana Lucia", "duration_s": 279,
+  "folder": null, "youtube_id": null }
+{ "natural_key": "kf:76237", "source": "karafun", "kf_id": 76237,
+  "title": "Caballero", "artist": "Alejandro Fernández", "duration_s": 228, "folder": null, "youtube_id": null }
 ```
-- `natural_key` = `artista|título|duración`. La calcula el agente y la nube la usa como identidad (la guarda tal cual, sin recalcularla). Regla exacta, la misma en los dos lados:
-  1. Artista y título se normalizan así: minúsculas; se quitan tildes y diéresis (`á→a`, `ü→u`) y `ñ→n` (equivale a descomponer en Unicode NFD y quitar las marcas combinantes; en Python, `unicodedata.normalize('NFD', s)` y descartar los caracteres con `unicodedata.combining(c)`); todo carácter que no sea `a-z` o `0-9` pasa a espacio; los espacios seguidos se reducen a uno y se recortan los extremos.
-  2. Duración: segundos enteros, **sin redondear a 5 s** (los decimales se redondean al segundo más cercano). Si se desconoce, `0`.
-  3. Se unen con `|` en el orden artista, título, duración.
-  Ejemplo: `Adriana Lucía` · `¡Quisiera olvidarte!` · 187 s → `adriana lucia|quisiera olvidarte|187`.
-  (Aclarado el 2026-10-06: la versión anterior decía "redondeada a 5 s", lo que contradecía este ejemplo; vale el ejemplo.)
-- `folder = "Por aprobar"` marca canciones descargadas de YouTube que el encargado todavía no revisó.
-
-### Catálogo en línea de KaraFun (v1.1)
-
-El catálogo en línea (~90 mil canciones, ids positivos y estables) **no lo sube el agente**: el encargado sube en el panel el CSV que exporta KaraFun (`Id;Title;Artist;…`). Esas canciones quedan con `source = "karafun"`, su `kf_id` y `natural_key = "karafun:<kf_id>"` (no llevan duración). Las mesas buscan en las dos fuentes; las de la carpeta local salen primero.
+- Canciones locales: `natural_key` = artista + `|` + título, normalizados (minúsculas, sin tildes, todo lo que no sea letra o número pasa a espacio, espacios simples). **Sin duración:** KaraFun la reporta en 0 hasta que analiza el archivo. Dos archivos con el mismo artista y título son la misma canción para el cliente.
+- Canciones de KaraFun en línea: `natural_key` = `kf:<id>`; su id sí es estable.
+- `duration_s` es informativa y puede ser 0.
+- `folder = "Por aprobar"` marca canciones descargadas de YouTube que el encargado todavía no revisó; `youtube_id` se rellena en esas.
 
 ### `song.upsert` — una canción suelta (tras una descarga)
 
@@ -79,22 +83,18 @@ El catálogo en línea (~90 mil canciones, ids positivos y estables) **no lo sub
 
 ## 3. Órdenes (`type`)
 
-Cambios de la v1.1 (aditivos: un agente v1 sigue funcionando con las canciones locales): `enqueue.payload.song` lleva `source` siempre y `kf_id` cuando `source = "karafun"`.
-
 | type | payload | qué hace el agente | `result` en el ack |
 |---|---|---|---|
-| `download` | `request_id`, `youtube_id`, `max_duration_s` (480) | Comprueba metadatos con yt-dlp (no directos, duración ≤ máximo), descarga mp4 ≤ 720p a `Música\Karaoke\Por aprobar\Artista - Título [youtube_id].mp4`, hace que KaraFun lo vea y sube la canción con `song.upsert` | `{ youtube_id, song: {…} }` |
-| `enqueue` | `request_id`, `song`, `singer` | Añade la canción al final de la cola de KaraFun con ese cantante. `song.source` (v1.1) dice de dónde es: `"local"` → la resuelve con `search` como en v1; `"karafun"` → trae además `song.kf_id` y la añade directamente con `addToQueue song="<kf_id>"`, sin buscar | `{ queue_pos }` |
-| `remove` | `request_id`, `singer` | Quita de la cola de KaraFun la entrada con ese cantante (marcador) si aún no ha sonado | `{ removed: true/false }` |
-| `catalog.resync` | — | Relee la carpeta y sube el catálogo completo (§2) | `{ total_songs }` |
+| `download` | `request_id`, `youtube_id`, `max_duration_s` (480) | Comprueba metadatos con yt-dlp (no directos, duración ≤ máximo), descarga mp4 ≤ 720p a `Música\Karaoke\Por aprobar\Artista - Título [youtube_id].mp4` (si ese id ya existe en la carpeta, no repite) y sube la canción con `song.upsert` | `{ youtube_id, song: {…} }` |
+| `enqueue` | `request_id`, `song`, `singer` | Añade la canción al final de la cola de KaraFun con ese cantante. Si KaraFun todavía no indexó el archivo (descarga reciente), la añade por ruta de archivo, y entonces sin cantante | `{ queue_pos, singer_shown }` |
+| `remove` | `request_id`, `singer`, `song` | Quita de la cola de KaraFun la entrada con ese cantante (marcador) que aún no suena; si entró sin cantante, la de ese título | `{ removed: true/false }` |
+| `catalog.resync` | `source` (`local` o `karafun`) | Vuelve a leer el catálogo de esa fuente y lo sube completo (§2) | `{ total_songs }` |
 
 Reglas:
 - **La nube decide cuándo** emitir `enqueue`: solo cuando la cola real de KaraFun tiene menos de 3 entradas (la que suena + 2). La rotación justa entre mesas vive en la nube.
 - El `singer` lleva un marcador único corto del pedido (`Ana · M7·k3f` = nombre, mesa 7, 3 caracteres del id) para que el agente reconcilie si se cae a mitad de una orden.
 - El agente nunca recibe la URL que escribió el cliente, solo el `youtube_id` ya validado.
 - Una orden con el mismo `id` nunca se ejecuta dos veces: el agente guarda un diario local de ids ejecutados.
-- La nube no reentrega una orden que ya no hace falta, aunque su lease venza sin `ack`: un `enqueue` cuyo pedido ya apareció en la cola real (el agente lo añadió y se cayó antes de confirmar), una descarga que ya nadie espera o un `remove` de algo que ya no está. Un `ack` tardío de esas órdenes responde `200` con `duplicate: true`.
-- Toda orden recibida en un `poll` queda arrendada 30 s: el agente debe ejecutar (o confirmar) todas las que recibe, también en el primer `poll` tras arrancar.
 
 ## 4. Lo que la nube no debe asumir
 

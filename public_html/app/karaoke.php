@@ -135,15 +135,18 @@ function karaoke_normalize(string $s, ?bool $useIntl = null): string
     return trim($s);
 }
 
-/** natural_key = artista|título|duración (segundos enteros, sin redondear a 5 s). */
-function karaoke_natural_key(string $artist, string $title, int|float $durationS): string
+/**
+ * natural_key de una canción local (contrato v2): artista|título normalizados, sin duración
+ * (KaraFun la da en 0 hasta analizar el archivo). Las de KaraFun en línea usan kf:<id>.
+ */
+function karaoke_natural_key(string $artist, string $title): string
 {
-    return karaoke_normalize($artist) . '|' . karaoke_normalize($title) . '|' . max(0, (int) round($durationS));
+    return karaoke_normalize($artist) . '|' . karaoke_normalize($title);
 }
 
 function karaoke_valid_natural_key(string $k): bool
 {
-    return strlen($k) <= 255 && preg_match('/^(?:[a-z0-9]+(?: [a-z0-9]+)*)?\|(?:[a-z0-9]+(?: [a-z0-9]+)*)?\|\d{1,5}$/', $k) === 1;
+    return strlen($k) <= 255 && preg_match('/^(?:[a-z0-9]+(?: [a-z0-9]+)*)?\|(?:[a-z0-9]+(?: [a-z0-9]+)*)?$/', $k) === 1;
 }
 
 function karaoke_is_por_aprobar(?string $folder): bool
@@ -512,7 +515,7 @@ function karaoke_search(PDO $pdo, string $q, int $limit = 30): array
         }
     }
     $st = $pdo->prepare("SELECT s.id, s.title, s.artist, s.duration_s, s.folder, s.source, s.popularity FROM karaoke_songs s
-        WHERE $where ORDER BY CASE WHEN s.source = 'local' THEN 0 ELSE 1 END, COALESCE(s.popularity, 0), s.id LIMIT 400");
+        WHERE $where ORDER BY CASE WHEN s.source = 'local' THEN 0 ELSE 1 END, COALESCE(s.popularity, 999999999), s.id LIMIT 400");
     $st->execute($params);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 
@@ -538,7 +541,7 @@ function karaoke_search(PDO $pdo, string $q, int $limit = 30): array
         }
         $score += 20 * $inTitle;
         // Desempate: la más cantada en KaraFun (posición en su catálogo), luego el título más corto.
-        $ranked[] = [$score, (int) ($s['popularity'] ?? 0), strlen($title), $s];
+        $ranked[] = [$score, $s['popularity'] === null ? PHP_INT_MAX : (int) $s['popularity'], strlen($title), $s];
     }
     usort($ranked, static fn (array $a, array $b): int => [$b[0], $a[1], $a[2]] <=> [$a[0], $b[1], $b[2]]);
     return array_map(static fn (array $r): array => [
@@ -550,19 +553,34 @@ function karaoke_search(PDO $pdo, string $q, int $limit = 30): array
     ], array_slice($ranked, 0, max(1, min(50, $limit))));
 }
 
-/** Valida una canción en el formato del contrato. Devuelve la fila limpia. */
+/**
+ * Valida una canción en el formato del contrato v2 y devuelve la fila limpia:
+ * local → natural_key = artista|título normalizados (sin duración); karafun → natural_key = kf:<kf_id>.
+ */
 function karaoke_clean_song(mixed $s, string $where = 'song'): array
 {
     if (!is_array($s)) {
         throw new KaraokeError("$where debe ser un objeto.", 422, 'bad_song');
     }
+    $source = $s['source'] ?? null;
+    if (!in_array($source, ['local', 'karafun'], true)) {
+        throw new KaraokeError("$where.source debe ser \"local\" o \"karafun\".", 422, 'bad_song');
+    }
+    $kf = $s['kf_id'] ?? null;
+    if ($kf !== null && (!is_int($kf) || $kf < 1)) {
+        throw new KaraokeError("$where.kf_id debe ser un entero positivo o null.", 422, 'bad_song');
+    }
     $key = $s['natural_key'] ?? null;
-    if (!is_string($key) || !karaoke_valid_natural_key($key)) {
-        throw new KaraokeError("$where.natural_key no cumple el formato artista|título|duración normalizado.", 422, 'bad_song');
+    if ($source === 'karafun') {
+        if ($kf === null || $key !== 'kf:' . $kf) {
+            throw new KaraokeError("$where: una canción de KaraFun en línea lleva kf_id y natural_key \"kf:<kf_id>\".", 422, 'bad_song');
+        }
+    } elseif (!is_string($key) || !karaoke_valid_natural_key($key)) {
+        throw new KaraokeError("$where.natural_key no cumple el formato artista|título normalizado.", 422, 'bad_song');
     }
     $title = $s['title'] ?? null;
     $artist = $s['artist'] ?? '';
-    $dur = $s['duration_s'] ?? null;
+    $dur = $s['duration_s'] ?? 0;
     if (!is_string($title) || trim($title) === '' || mb_strlen($title) > 200) {
         throw new KaraokeError("$where.title es obligatorio (máximo 200 caracteres).", 422, 'bad_song');
     }
@@ -570,56 +588,112 @@ function karaoke_clean_song(mixed $s, string $where = 'song'): array
         throw new KaraokeError("$where.artist admite máximo 200 caracteres.", 422, 'bad_song');
     }
     if (!is_int($dur) && !(is_float($dur) && floor($dur) === $dur) || $dur < 0 || $dur > 36000) {
-        throw new KaraokeError("$where.duration_s debe ser un entero de segundos.", 422, 'bad_song');
+        throw new KaraokeError("$where.duration_s debe ser un entero de segundos (0 si no se conoce).", 422, 'bad_song');
     }
     foreach (['folder' => 120, 'file' => 500] as $f => $max) {
         if (isset($s[$f]) && (!is_string($s[$f]) || mb_strlen($s[$f]) > $max)) {
             throw new KaraokeError("$where.$f admite máximo $max caracteres.", 422, 'bad_song');
         }
     }
-    $kf = $s['kf_id'] ?? null;
+    $yt = $s['youtube_id'] ?? null;
+    if ($yt !== null && (!is_string($yt) || !preg_match('/^[A-Za-z0-9_-]{11}$/', $yt))) {
+        throw new KaraokeError("$where.youtube_id no es un id de YouTube.", 422, 'bad_song');
+    }
     return [
         'natural_key' => $key,
+        'source' => $source,
+        'kf_id' => $kf,
         'title' => trim($title),
         'artist' => trim($artist),
         'duration_s' => (int) $dur,
         'folder' => isset($s['folder']) && $s['folder'] !== '' ? $s['folder'] : null,
         'file' => isset($s['file']) && $s['file'] !== '' ? $s['file'] : null,
-        'kf_id' => is_int($kf) ? $kf : null,
-        // La nube no recalcula la clave, pero avisa si el agente la calculó distinto (contrato §2).
-        'key_matches' => karaoke_natural_key(trim($artist), trim($title), (int) $dur) === $key,
+        'youtube_id' => $yt,
+        'popularity' => null,
+        // La nube no recalcula la clave local, pero avisa si el agente la calculó distinto (contrato §2).
+        'key_matches' => $source === 'karafun' || karaoke_natural_key(trim($artist), trim($title)) === $key,
     ];
 }
 
-/** Inserta o actualiza una canción por natural_key. Devuelve su id. */
+/**
+ * Inserta o actualiza canciones por natural_key, en lotes (una sentencia cada 200), y reindexa
+ * solo las nuevas o con artista/título cambiado. Sirve igual para 1 canción que para 90 mil.
+ * popularity solo se pisa si viene (la sincronización del agente no la trae; el CSV sí).
+ */
+function karaoke_bulk_upsert(PDO $pdo, array $songs, string $seenAt): array
+{
+    if (!$songs) {
+        return ['added' => 0, 'updated' => 0];
+    }
+    $now = karaoke_now();
+    $my = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
+    $set = ['source', 'title', 'artist', 'duration_s', 'search_text', 'kf_id', 'folder', 'file', 'youtube_id', 'seen_at', 'updated_at'];
+    $upsert = $my
+        ? ' ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(static fn (string $c): string => "$c = VALUES($c)", $set)) . ', popularity = COALESCE(VALUES(popularity), popularity), available = 1'
+        : ' ON CONFLICT(natural_key) DO UPDATE SET ' . implode(', ', array_map(static fn (string $c): string => "$c = excluded.$c", $set)) . ', popularity = COALESCE(excluded.popularity, popularity), available = 1';
+    $existing = [];
+    foreach (array_chunk(array_column($songs, 'natural_key'), 500) as $keys) {
+        $st = $pdo->prepare('SELECT natural_key, search_text, title, artist FROM karaoke_songs WHERE natural_key IN (' . implode(',', array_fill(0, count($keys), '?')) . ')');
+        $st->execute($keys);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $existing[$r['natural_key']] = $r;
+        }
+    }
+    $added = 0;
+    $updated = 0;
+    $reindex = [];
+    foreach (array_chunk($songs, 200) as $chunk) {
+        $vals = [];
+        $params = [];
+        foreach ($chunk as $s) {
+            $search = mb_substr(karaoke_normalize($s['artist'] . ' ' . $s['title']), 0, 420);
+            $vals[] = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)';
+            array_push($params, $s['source'], $s['natural_key'], $s['title'], $s['artist'], $s['duration_s'], $search, $s['kf_id'], $s['popularity'] ?? null, $s['folder'], $s['file'] ?? null, $s['youtube_id'] ?? null, $seenAt, $now, $now);
+            $old = $existing[$s['natural_key']] ?? null;
+            if ($old === null) {
+                $added++;
+                $reindex[] = $s['natural_key'];
+            } elseif ($old['title'] !== $s['title'] || $old['artist'] !== $s['artist']) {
+                $updated++;
+                if ($old['search_text'] !== $search) {
+                    $reindex[] = $s['natural_key'];
+                }
+            }
+        }
+        $pdo->prepare('INSERT INTO karaoke_songs (source, natural_key, title, artist, duration_s, search_text, kf_id, popularity, folder, file, youtube_id, available, seen_at, created_at, updated_at) VALUES ' . implode(', ', $vals) . $upsert)
+            ->execute($params);
+    }
+    foreach (array_chunk($reindex, 400) as $keys) {
+        $st = $pdo->prepare('SELECT id, search_text FROM karaoke_songs WHERE natural_key IN (' . implode(',', array_fill(0, count($keys), '?')) . ')');
+        $st->execute($keys);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $ids = array_map(static fn (array $r): int => (int) $r['id'], $rows);
+        $pdo->prepare('DELETE FROM karaoke_song_words WHERE song_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')')->execute($ids);
+        $pairs = [];
+        foreach ($rows as $r) {
+            foreach (karaoke_words($r['search_text']) as $w) {
+                $pairs[] = [(int) $r['id'], $w];
+            }
+        }
+        karaoke_insert_words($pdo, $pairs);
+    }
+    return ['added' => $added, 'updated' => $updated];
+}
+
+/** Inserta o actualiza una canción (song.upsert, descargas). Devuelve su id. */
 function karaoke_song_upsert(PDO $pdo, array $song, ?string $seenAt = null): int
 {
-    $now = karaoke_now();
-    $seenAt ??= $now;
-    $search = mb_substr(karaoke_normalize($song['artist'] . ' ' . $song['title']), 0, 420);
-    $st = $pdo->prepare('SELECT id, search_text FROM karaoke_songs WHERE natural_key = ?');
+    karaoke_bulk_upsert($pdo, [$song], $seenAt ?? karaoke_now());
+    $st = $pdo->prepare('SELECT id FROM karaoke_songs WHERE natural_key = ?');
     $st->execute([$song['natural_key']]);
-    $row = $st->fetch(PDO::FETCH_ASSOC);
-    if ($row) {
-        $pdo->prepare('UPDATE karaoke_songs SET title = ?, artist = ?, duration_s = ?, search_text = ?, kf_id = ?, folder = ?, file = ?, available = 1, seen_at = ?, updated_at = ? WHERE id = ?')
-            ->execute([$song['title'], $song['artist'], $song['duration_s'], $search, $song['kf_id'] ?? null, $song['folder'], $song['file'], $seenAt, $now, $row['id']]);
-        if ($row['search_text'] !== $search) {
-            karaoke_set_words($pdo, (int) $row['id'], $search);
-        }
-        return (int) $row['id'];
-    }
-    $pdo->prepare('INSERT INTO karaoke_songs (source, natural_key, title, artist, duration_s, search_text, kf_id, folder, file, available, seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)')
-        ->execute(['local', $song['natural_key'], $song['title'], $song['artist'], $song['duration_s'], $search, $song['kf_id'] ?? null, $song['folder'], $song['file'], $seenAt, $now, $now]);
-    $id = (int) $pdo->lastInsertId();
-    karaoke_set_words($pdo, $id, $search);
-    return $id;
+    return (int) $st->fetchColumn();
 }
 
 /**
- * Importa el catálogo en línea de KaraFun (CSV exportado de KaraFun: Id;Title;Artist;…, separado
- * por «;»). Cada canción queda con source = 'karafun', su kf_id (estable en el catálogo en línea)
- * y natural_key = 'karafun:<kf_id>'. Las que ya no vienen pasan a available = 0. Todo en una
- * transacción: una importación a medias nunca deja el buscador vacío ni mezclado.
+ * Importa el catálogo en línea de KaraFun desde el CSV que exporta KaraFun (Id;Title;Artist;…,
+ * separado por «;»). Alternativa a la sincronización del agente (contrato §2, source karafun):
+ * mismas claves kf:<id>. Además guarda la posición en el CSV (de más a menos cantada) como
+ * popularity. Las que ya no vienen pasan a available = 0. Todo en una transacción.
  */
 function karaoke_import_karafun_csv(PDO $pdo, string $path): array
 {
@@ -640,56 +714,16 @@ function karaoke_import_karafun_csv(PDO $pdo, string $path): array
     }
     return karaoke_tx($pdo, static function () use ($pdo, $f, $cols): array {
         $now = karaoke_now();
-        $existing = [];
-        foreach ($pdo->query("SELECT kf_id, id, search_text, title, artist FROM karaoke_songs WHERE source = 'karafun'") as $r) {
-            $existing[(int) $r['kf_id']] = $r;
-        }
         $seen = [];
-        $added = 0;
-        $updated = 0;
         $skipped = 0;
-        // Upsert por lotes (una sentencia por cada 200 canciones) y reindexado solo de lo nuevo o cambiado.
-        $upsert = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql'
-            ? ' ON DUPLICATE KEY UPDATE title = VALUES(title), artist = VALUES(artist), search_text = VALUES(search_text), popularity = VALUES(popularity), available = 1, seen_at = VALUES(seen_at), updated_at = VALUES(updated_at)'
-            : ' ON CONFLICT(natural_key) DO UPDATE SET title = excluded.title, artist = excluded.artist, search_text = excluded.search_text, popularity = excluded.popularity, available = 1, seen_at = excluded.seen_at, updated_at = excluded.updated_at';
-        $flush = static function (array $batch) use ($pdo, $now, $upsert, &$existing, &$added, &$updated): void {
-            $reindex = [];
-            foreach (array_chunk($batch, 200) as $chunk) {
-                $vals = [];
-                $params = [];
-                foreach ($chunk as [$kf, $title, $artist, $search, $rank]) {
-                    $vals[] = "('karafun', ?, ?, ?, 0, ?, ?, ?, 1, ?, ?, ?)";
-                    array_push($params, 'karafun:' . $kf, $title, $artist, $search, $kf, $rank, $now, $now, $now);
-                    $old = $existing[$kf] ?? null;
-                    if ($old === null) {
-                        $added++;
-                        $reindex[] = 'karafun:' . $kf;
-                    } elseif ($old['title'] !== $title || $old['artist'] !== $artist) {
-                        $updated++;
-                        if ($old['search_text'] !== $search) {
-                            $reindex[] = 'karafun:' . $kf;
-                        }
-                    }
-                }
-                $pdo->prepare('INSERT INTO karaoke_songs (source, natural_key, title, artist, duration_s, search_text, kf_id, popularity, available, seen_at, created_at, updated_at) VALUES ' . implode(', ', $vals) . $upsert)
-                    ->execute($params);
-            }
-            foreach (array_chunk($reindex, 400) as $keys) {
-                $st = $pdo->prepare('SELECT id, search_text FROM karaoke_songs WHERE natural_key IN (' . implode(',', array_fill(0, count($keys), '?')) . ')');
-                $st->execute($keys);
-                $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-                $ids = array_map(static fn (array $r): int => (int) $r['id'], $rows);
-                $pdo->prepare('DELETE FROM karaoke_song_words WHERE song_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')')->execute($ids);
-                $pairs = [];
-                foreach ($rows as $r) {
-                    foreach (karaoke_words($r['search_text']) as $w) {
-                        $pairs[] = [(int) $r['id'], $w];
-                    }
-                }
-                karaoke_insert_words($pdo, $pairs);
-            }
-        };
+        $totals = ['added' => 0, 'updated' => 0];
         $batch = [];
+        $flush = static function () use ($pdo, $now, &$batch, &$totals): void {
+            $r = karaoke_bulk_upsert($pdo, $batch, $now);
+            $totals['added'] += $r['added'];
+            $totals['updated'] += $r['updated'];
+            $batch = [];
+        };
         while (($row = fgetcsv($f, 0, ';', '"', '')) !== false) {
             $kf = trim((string) ($row[$cols['id']] ?? ''));
             $title = trim((string) ($row[$cols['title']] ?? ''));
@@ -704,30 +738,34 @@ function karaoke_import_karafun_csv(PDO $pdo, string $path): array
                 continue;
             }
             $seen[$kf] = true;
-            // El CSV de KaraFun viene ordenado de más a menos cantada: esa posición desempata la búsqueda.
-            $batch[] = [$kf, $title, $artist, mb_substr(karaoke_normalize($artist . ' ' . $title), 0, 420), count($seen)];
+            $batch[] = ['natural_key' => 'kf:' . $kf, 'source' => 'karafun', 'kf_id' => $kf, 'title' => $title, 'artist' => $artist,
+                'duration_s' => 0, 'folder' => null, 'file' => null, 'youtube_id' => null, 'popularity' => count($seen)];
             if (count($batch) >= 1000) {
-                $flush($batch);
-                $batch = [];
+                $flush();
             }
         }
         fclose($f);
         if ($batch) {
-            $flush($batch);
+            $flush();
         }
         if (!$seen) {
             throw new KaraokeError('El archivo no tiene canciones válidas.', 422, 'csv_empty');
         }
         $gone = $pdo->prepare("UPDATE karaoke_songs SET available = 0, updated_at = ? WHERE source = 'karafun' AND available = 1 AND seen_at < ?");
         $gone->execute([$now, $now]);
-        $summary = ['songs' => count($seen), 'added' => $added, 'updated' => $updated, 'unavailable' => $gone->rowCount(), 'skipped' => $skipped, 'imported_at' => karaoke_iso($now)];
+        $summary = ['songs' => count($seen), 'added' => $totals['added'], 'updated' => $totals['updated'], 'unavailable' => $gone->rowCount(), 'skipped' => $skipped, 'imported_at' => karaoke_iso($now)];
         karaoke_save_setting($pdo, 'karaoke_karafun_import', json_encode($summary));
         return $summary;
     });
 }
 
-function karaoke_catalog_begin(PDO $pdo): array
+/** catalog.begin: { source: "local" | "karafun" } → { sync_id }. */
+function karaoke_catalog_begin(PDO $pdo, array $body = []): array
 {
+    $source = $body['source'] ?? null;
+    if (!in_array($source, ['local', 'karafun'], true)) {
+        throw new KaraokeError('source debe ser "local" o "karafun".', 422, 'bad_sync');
+    }
     // Sincronizaciones abandonadas hace más de un día: fuera su staging.
     $old = $pdo->prepare("SELECT id FROM karaoke_catalog_syncs WHERE status = 'open' AND started_at < ?");
     $old->execute([karaoke_now(-86400)]);
@@ -737,7 +775,7 @@ function karaoke_catalog_begin(PDO $pdo): array
         $pdo->prepare("UPDATE karaoke_catalog_syncs SET status = 'abandoned' WHERE id = ?")->execute([$sid]);
     }
     $id = bin2hex(random_bytes(16));
-    $pdo->prepare("INSERT INTO karaoke_catalog_syncs (id, status, started_at) VALUES (?, 'open', ?)")->execute([$id, karaoke_now()]);
+    $pdo->prepare("INSERT INTO karaoke_catalog_syncs (id, source, status, started_at) VALUES (?, ?, 'open', ?)")->execute([$id, $source, karaoke_now()]);
     return ['sync_id' => $id];
 }
 
@@ -774,6 +812,9 @@ function karaoke_catalog_chunk(PDO $pdo, array $body): array
     $mismatches = [];
     foreach ($songs as $i => $s) {
         $c = karaoke_clean_song($s, "songs[$i]");
+        if ($c['source'] !== $sync['source']) {
+            throw new KaraokeError("songs[$i].source no coincide con la sincronización ({$sync['source']}).", 422, 'bad_song');
+        }
         if (!$c['key_matches'] && count($mismatches) < 5) {
             $mismatches[] = $c['natural_key'];
         }
@@ -782,9 +823,15 @@ function karaoke_catalog_chunk(PDO $pdo, array $body): array
     karaoke_tx($pdo, static function () use ($pdo, $sync, $index, $clean): void {
         $pdo->prepare('DELETE FROM karaoke_catalog_staging WHERE sync_id = ? AND chunk_index = ?')->execute([$sync['id'], $index]);
         $pdo->prepare('DELETE FROM karaoke_catalog_chunks WHERE sync_id = ? AND chunk_index = ?')->execute([$sync['id'], $index]);
-        $ins = $pdo->prepare('INSERT INTO karaoke_catalog_staging (sync_id, chunk_index, natural_key, title, artist, duration_s, folder, file) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-        foreach ($clean as $c) {
-            $ins->execute([$sync['id'], $index, $c['natural_key'], $c['title'], $c['artist'], $c['duration_s'], $c['folder'], $c['file']]);
+        foreach (array_chunk($clean, 100) as $part) {
+            $vals = [];
+            $params = [];
+            foreach ($part as $c) {
+                $vals[] = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                array_push($params, $sync['id'], $index, $c['natural_key'], $c['title'], $c['artist'], $c['duration_s'], $c['folder'], $c['file'], $c['kf_id'], $c['youtube_id']);
+            }
+            $pdo->prepare('INSERT INTO karaoke_catalog_staging (sync_id, chunk_index, natural_key, title, artist, duration_s, folder, file, kf_id, youtube_id) VALUES ' . implode(', ', $vals))
+                ->execute($params);
         }
         $pdo->prepare('INSERT INTO karaoke_catalog_chunks (sync_id, chunk_index, song_count, received_at) VALUES (?, ?, ?, ?)')
             ->execute([$sync['id'], $index, count($clean), karaoke_now()]);
@@ -797,8 +844,9 @@ function karaoke_catalog_chunk(PDO $pdo, array $body): array
 }
 
 /**
- * Activa la versión nueva en una transacción: las canciones que vinieron quedan disponibles y
- * las que no (y no se subieron sueltas durante la sincronización) pasan a available = 0.
+ * Activa la versión nueva de esa fuente en una transacción: las canciones que vinieron quedan
+ * disponibles y las de esa fuente que no (y no se subieron sueltas durante la sincronización)
+ * pasan a available = 0. La otra fuente no se toca.
  */
 function karaoke_catalog_commit(PDO $pdo, array $body): array
 {
@@ -826,10 +874,12 @@ function karaoke_catalog_commit(PDO $pdo, array $body): array
     if ($received !== $total) {
         throw new KaraokeError("Llegaron $received canciones y se anunciaron $total. No se activó el catálogo.", 409, 'count_mismatch');
     }
+    @set_time_limit(300);
 
     return karaoke_tx($pdo, static function () use ($pdo, $sync, $chunks, $total): array {
         $now = karaoke_now();
-        $rows = $pdo->prepare('SELECT natural_key, title, artist, duration_s, folder, file FROM karaoke_catalog_staging WHERE sync_id = ? ORDER BY chunk_index, id');
+        $source = $sync['source'];
+        $rows = $pdo->prepare('SELECT natural_key, title, artist, duration_s, folder, file, kf_id, youtube_id FROM karaoke_catalog_staging WHERE sync_id = ? ORDER BY chunk_index, id');
         $rows->execute([$sync['id']]);
         // Una misma canción en varios archivos: gana la que ya está en su carpeta de letra.
         $byKey = [];
@@ -839,18 +889,20 @@ function karaoke_catalog_commit(PDO $pdo, array $body): array
                 $byKey[$r['natural_key']] = $r;
             }
         }
-        $existing = $pdo->query("SELECT natural_key, available FROM karaoke_songs WHERE source = 'local'")->fetchAll(PDO::FETCH_KEY_PAIR);
-        $added = 0;
+        $songs = [];
         foreach ($byKey as $key => $r) {
-            if (!array_key_exists($key, $existing)) {
-                $added++;
-            }
-            karaoke_song_upsert($pdo, ['natural_key' => (string) $key, 'title' => $r['title'], 'artist' => $r['artist'], 'duration_s' => (int) $r['duration_s'], 'folder' => $r['folder'], 'file' => $r['file'], 'kf_id' => null], $now);
+            $songs[] = ['natural_key' => (string) $key, 'source' => $source, 'kf_id' => $r['kf_id'] === null ? null : (int) $r['kf_id'], 'title' => $r['title'], 'artist' => $r['artist'],
+                'duration_s' => (int) $r['duration_s'], 'folder' => $r['folder'], 'file' => $r['file'], 'youtube_id' => $r['youtube_id'], 'popularity' => null];
         }
-        $gone = $pdo->prepare("UPDATE karaoke_songs SET available = 0, updated_at = ? WHERE source = 'local' AND available = 1 AND seen_at < ?");
-        $gone->execute([$now, $sync['started_at']]);
+        $added = 0;
+        foreach (array_chunk($songs, 2000) as $part) {
+            $added += karaoke_bulk_upsert($pdo, $part, $now)['added'];
+        }
+        $gone = $pdo->prepare('UPDATE karaoke_songs SET available = 0, updated_at = ? WHERE source = ? AND available = 1 AND seen_at < ?');
+        $gone->execute([$now, $source, $sync['started_at']]);
         $summary = [
             'ok' => true,
+            'source' => $source,
             'total_songs' => $total,
             'distinct' => count($byKey),
             'added' => $added,
@@ -860,8 +912,10 @@ function karaoke_catalog_commit(PDO $pdo, array $body): array
         $pdo->prepare("UPDATE karaoke_catalog_syncs SET status = 'committed', committed_at = ?, total_chunks = ?, total_songs = ?, summary = ? WHERE id = ?")
             ->execute([$now, $chunks, $total, json_encode($summary), $sync['id']]);
         $pdo->prepare('DELETE FROM karaoke_catalog_staging WHERE sync_id = ?')->execute([$sync['id']]);
-        karaoke_agent_row($pdo);
-        $pdo->prepare('UPDATE karaoke_agent SET last_sync_at = ?, last_sync_songs = ? WHERE id = 1')->execute([$now, count($byKey)]);
+        if ($source === 'local') {
+            karaoke_agent_row($pdo);
+            $pdo->prepare('UPDATE karaoke_agent SET last_sync_at = ?, last_sync_songs = ? WHERE id = 1')->execute([$now, count($byKey)]);
+        }
         return $summary;
     });
 }
@@ -1065,7 +1119,10 @@ function karaoke_request_remove(PDO $pdo, string $id): void
         $st = $pdo->prepare("SELECT COUNT(*) FROM karaoke_commands WHERE request_id = ? AND type = 'remove' AND status IN ('pending', 'leased')");
         $st->execute([$r['id']]);
         if ((int) $st->fetchColumn() === 0) {
-            karaoke_command_create($pdo, 'remove', ['request_id' => $r['id'], 'singer' => karaoke_singer_label($r)], $r['id']);
+            $song = $pdo->prepare('SELECT * FROM karaoke_songs WHERE id = ?');
+            $song->execute([$r['song_id']]);
+            $s = $song->fetch(PDO::FETCH_ASSOC) ?: [];
+            karaoke_command_create($pdo, 'remove', ['request_id' => $r['id'], 'singer' => karaoke_singer_label($r), 'song' => $s ? karaoke_enqueue_song($s) : null], $r['id']);
         }
     });
 }
@@ -1210,9 +1267,10 @@ function karaoke_command_obsolete(PDO $pdo, array $c): ?string
 
 /**
  * Entrega hasta 10 órdenes pendientes o con lease vencido, por id, y las arrienda 30 s.
- * Una orden que agotó sus 5 intentos sin confirmación pasa a failed.
+ * Una orden que agotó sus 5 intentos sin confirmación pasa a failed. Con KaraFun no disponible
+ * (contrato v2) las órdenes enqueue y remove esperan sin gastar intentos.
  */
-function karaoke_lease_commands(PDO $pdo): array
+function karaoke_lease_commands(PDO $pdo, bool $karafunAvailable = true): array
 {
     $now = karaoke_now();
     $st = $pdo->prepare("SELECT * FROM karaoke_commands WHERE status = 'pending' OR (status = 'leased' AND lease_until < ?) ORDER BY id LIMIT " . (KARAOKE_POLL_MAX_COMMANDS * 3));
@@ -1222,6 +1280,9 @@ function karaoke_lease_commands(PDO $pdo): array
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $c) {
         if (count($out) >= KARAOKE_POLL_MAX_COMMANDS) {
             break;
+        }
+        if (!$karafunAvailable && in_array($c['type'], ['enqueue', 'remove'], true)) {
+            continue;
         }
         if (($skip = karaoke_command_obsolete($pdo, $c)) !== null) {
             karaoke_tx($pdo, static function () use ($pdo, $c, $now, $skip): void {
@@ -1331,8 +1392,11 @@ function karaoke_agent_ack(PDO $pdo, array $body): array
                 break;
             case 'enqueue':
                 $pos = $result['queue_pos'] ?? null;
-                $pdo->prepare("UPDATE karaoke_requests SET acked_at = ?, kf_queue_pos = COALESCE(?, kf_queue_pos), updated_at = ? WHERE id = ? AND status = 'enviado'")
-                    ->execute([$now, is_int($pos) ? $pos : null, $now, $cmd['request_id']]);
+                // singer_shown = false: KaraFun aún no indexaba el archivo y entró por ruta, sin cantante
+                // (contrato v2); la cola real se reconcilia entonces por título.
+                $shown = ($result['singer_shown'] ?? true) === false ? 0 : 1;
+                $pdo->prepare("UPDATE karaoke_requests SET acked_at = ?, kf_queue_pos = COALESCE(?, kf_queue_pos), singer_shown = ?, updated_at = ? WHERE id = ? AND status IN ('enviado', 'en_cola', 'cantando')")
+                    ->execute([$now, is_int($pos) ? $pos : null, $shown, $now, $cmd['request_id']]);
                 break;
             case 'remove':
                 if (($result['removed'] ?? false) === true && $cmd['request_id']) {
@@ -1397,10 +1461,13 @@ function karaoke_marker_of(string $singer): ?string
 function karaoke_reconcile(PDO $pdo, array $prevQueue, array $queue): void
 {
     $byMarker = [];
-    foreach ($queue as $e) {
+    $unmarked = [];   // entradas sin marcador: puestas a mano o descargas que entraron sin cantante
+    foreach ($queue as $i => $e) {
         $m = karaoke_marker_of($e['singer']);
-        if ($m !== null && !isset($byMarker[$m])) {
-            $byMarker[$m] = $e;
+        if ($m !== null) {
+            $byMarker[$m] ??= $e;
+        } else {
+            $unmarked[$i] = $e;
         }
     }
     $present = static function (array $entry) use ($queue): bool {
@@ -1411,10 +1478,21 @@ function karaoke_reconcile(PDO $pdo, array $prevQueue, array $queue): void
         }
         return false;
     };
-    $st = $pdo->prepare('SELECT * FROM karaoke_requests WHERE status IN (?, ?, ?)');
+    $st = $pdo->prepare('SELECT r.*, s.title AS song_title FROM karaoke_requests r LEFT JOIN karaoke_songs s ON s.id = r.song_id
+        WHERE r.status IN (?, ?, ?) ORDER BY r.sent_at, r.id');
     $st->execute(KARAOKE_IN_KARAFUN);
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $e = $byMarker[$r['marker']] ?? null;
+        if ($e === null && !(int) $r['singer_shown']) {
+            // Entró sin cantante: se identifica por título, una entrada por pedido.
+            foreach ($unmarked as $i => $u) {
+                if (karaoke_normalize($u['title']) === karaoke_normalize((string) $r['song_title'])) {
+                    $e = $u;
+                    unset($unmarked[$i]);
+                    break;
+                }
+            }
+        }
         if ($e !== null) {
             $to = $e['status'] === 'playing' ? 'cantando' : 'en_cola';
             if ($r['status'] !== $to && in_array($to, KARAOKE_TRANSITIONS[$r['status']], true)) {
@@ -1455,15 +1533,8 @@ function karaoke_fill_buffer(PDO $pdo, array $queue): int
     if (!$night) {
         return 0;
     }
-    $shown = [];
-    foreach ($queue as $e) {
-        if (($m = karaoke_marker_of($e['singer'])) !== null) {
-            $shown[$m] = true;
-        }
-    }
-    $st = $pdo->prepare("SELECT marker FROM karaoke_requests WHERE status = 'enviado'");
-    $st->execute();
-    $inFlight = count(array_filter($st->fetchAll(PDO::FETCH_COLUMN), static fn (string $m): bool => !isset($shown[$m])));
+    // Tras karaoke_reconcile, lo que sigue «enviado» es lo que KaraFun aún no muestra.
+    $inFlight = (int) $pdo->query("SELECT COUNT(*) FROM karaoke_requests WHERE status = 'enviado'")->fetchColumn();
     $buffer = count($queue) + $inFlight;
     $emitted = 0;
     $next = $pdo->prepare("SELECT r.*, s.natural_key, s.title, s.artist, s.duration_s, s.available, s.source, s.kf_id
@@ -1493,17 +1564,17 @@ function karaoke_fill_buffer(PDO $pdo, array $queue): int
     return $emitted;
 }
 
-/**
- * La canción tal como viaja en la orden enqueue (contrato v1.1): los campos de v1 más source, y
- * kf_id solo para las canciones del catálogo en línea de KaraFun (el agente la añade por ese id).
- */
+/** La canción tal como viaja en las órdenes enqueue y remove (formato de canción del contrato v2). */
 function karaoke_enqueue_song(array $r): array
 {
-    $song = ['natural_key' => $r['natural_key'], 'title' => $r['title'], 'artist' => $r['artist'], 'duration_s' => (int) $r['duration_s'], 'source' => $r['source']];
-    if ($r['source'] === 'karafun') {
-        $song['kf_id'] = (int) $r['kf_id'];
-    }
-    return $song;
+    return [
+        'natural_key' => $r['natural_key'],
+        'source' => $r['source'],
+        'kf_id' => $r['kf_id'] === null ? null : (int) $r['kf_id'],
+        'title' => $r['title'],
+        'artist' => $r['artist'],
+        'duration_s' => (int) $r['duration_s'],
+    ];
 }
 
 /** poll: latido + estado de KaraFun + entrega de órdenes. */
@@ -1518,25 +1589,36 @@ function karaoke_agent_poll(PDO $pdo, array $body): array
         throw new KaraokeError('karafun debe ser un objeto.', 422, 'bad_poll');
     }
     $connected = ($kf['connected'] ?? false) === true;
+    // Contrato v2: connected false o running false = KaraFun no disponible.
+    $available = $connected && ($kf['running'] ?? false) === true;
+    $working = $body['working'] ?? [];
+    if (!is_array($working) || !array_is_list($working) || count($working) > 100 || array_filter($working, static fn ($w): bool => !is_int($w) || $w < 1)) {
+        throw new KaraokeError('working debe ser una lista de ids de órdenes.', 422, 'bad_poll');
+    }
     $hasQueue = array_key_exists('queue', $kf) && $kf['queue'] !== null;
     $queue = $hasQueue ? karaoke_clean_queue($kf['queue']) : null;
     $state = is_string($kf['state'] ?? null) ? mb_substr($kf['state'], 0, 20) : null;
     $acks = is_int($body['acks_pending'] ?? null) ? max(0, $body['acks_pending']) : 0;
 
-    karaoke_tx($pdo, static function () use ($pdo, $version, $kf, $connected, $queue, $state, $acks): void {
+    karaoke_tx($pdo, static function () use ($pdo, $version, $kf, $connected, $available, $queue, $state, $acks): void {
         $prev = karaoke_agent_row($pdo);
         $prevQueue = json_decode((string) ($prev['queue_snapshot'] ?? '[]'), true) ?: [];
-        // Solo con KaraFun conectado y una cola reportada se puede comparar y rellenar el buffer.
-        if ($connected && $queue !== null) {
+        // Solo con KaraFun disponible y una cola reportada se puede comparar y rellenar el buffer.
+        if ($available && $queue !== null) {
             karaoke_reconcile($pdo, $prevQueue, $queue);
             karaoke_fill_buffer($pdo, $queue);
         }
         $pdo->prepare('UPDATE karaoke_agent SET last_seen_at = ?, version = ?, kf_running = ?, kf_connected = ?, kf_state = ?, queue_snapshot = ?, acks_pending = ? WHERE id = 1')
             ->execute([karaoke_now(), $version, ($kf['running'] ?? false) === true ? 1 : 0, $connected ? 1 : 0, $state,
-                $connected && $queue !== null ? json_encode($queue, JSON_UNESCAPED_UNICODE) : $prev['queue_snapshot'], $acks]);
+                $available && $queue !== null ? json_encode($queue, JSON_UNESCAPED_UNICODE) : $prev['queue_snapshot'], $acks]);
     });
 
-    return ['server_time' => date('c', karaoke_clock()), 'commands' => karaoke_lease_commands($pdo)];
+    // Órdenes en marcha en el agente (descargas largas): se extiende su lease y no se reentregan.
+    if ($working) {
+        $pdo->prepare("UPDATE karaoke_commands SET lease_until = ?, updated_at = ? WHERE status = 'leased' AND id IN (" . implode(',', array_fill(0, count($working), '?')) . ')')
+            ->execute(array_merge([karaoke_now(KARAOKE_LEASE_S), karaoke_now()], $working));
+    }
+    return ['server_time' => date('c', karaoke_clock()), 'commands' => karaoke_lease_commands($pdo, $available && $queue !== null)];
 }
 
 /** Estado del agente para el panel y las mesas. */
@@ -1568,7 +1650,7 @@ function karaoke_agent_dispatch(PDO $pdo, string $action, array $body): array
     return match ($action) {
         'poll' => karaoke_agent_poll($pdo, $body),
         'ack' => karaoke_agent_ack($pdo, $body),
-        'catalog.begin' => karaoke_catalog_begin($pdo),
+        'catalog.begin' => karaoke_catalog_begin($pdo, $body),
         'catalog.chunk' => karaoke_catalog_chunk($pdo, $body),
         'catalog.commit' => karaoke_catalog_commit($pdo, $body),
         'song.upsert' => (static function () use ($pdo, $body): array {
