@@ -7,14 +7,14 @@ Guía para el encargado. En el día a día **no hay que correr ningún comando**
 1. Encender el PC del bar e **iniciar sesión con el usuario «Sarao Pub»**. El PC no inicia sesión solo, y el agente arranca después de iniciar sesión.
 2. Esperar 1–2 minutos: el agente abre KaraFun si está cerrado (abrirlo a mano antes también vale).
 3. En el panel → **Karaoke**: el agente debe decir **Conectado**. Si dice otra cosa, ver «En el panel» más abajo.
-4. Pulsar **Abrir noche** y mostrar el **código de 4 números** en la pantalla del karaoke. Sin código, las mesas no pueden pedir.
+4. Pulsar **Abrir noche**: el panel genera el **código de 4 números**. Dárselo a las mesas que lo pidan (o escribirlo en un tablero visible). Sin código, las mesas no pueden pedir. Lo genera el panel, no KaraFun: no aparece solo en ninguna pantalla.
 5. Al terminar: **Cerrar noche** (se cancelan los pedidos que esperaban; lo que ya está en KaraFun sigue sonando) y apagar Windows normalmente. Si se olvida, la noche se cierra sola a las 14 horas.
 
 ## Lo que dicen las mesas
 
 | La mesa ve | Qué pasa | Qué hacer |
 |---|---|---|
-| «El código de la noche no coincide» | Escribieron mal el código, o se cambió con **Cambiar código**. | Mostrar el código que aparece en el panel. |
+| «El código de la noche no coincide» | Escribieron mal el código, o se cambió con **Cambiar código**. | Darles el código que aparece en el panel → Karaoke. |
 | «El karaoke por mesa no está abierto en este momento» | No hay noche abierta (o se cerró sola a las 14 h). | Panel → Karaoke → **Abrir noche**. |
 | «Esta mesa no tiene pedidos de karaoke activos» | La mesa está desactivada en el panel. | Panel → Karaoke → Mesas → activarla. |
 | «Este código QR no es válido» | El QR es de una mesa que ya no existe o está dañado. | Reimprimir el QR desde el panel (**Ver e imprimir QR**). |

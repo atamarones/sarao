@@ -165,7 +165,7 @@ Descargar de YouTube va contra sus términos de uso, y poner música en un local
 
 ## 11. Seguridad y abuso
 
-- QR por mesa con `qr_token` impreso + `night_code` que cambia cada noche y se muestra en la pantalla del karaoke. Un QR fotografiado no sirve desde la casa al día siguiente.
+- QR por mesa con `qr_token` impreso + `night_code` que cambia cada noche; lo genera el panel y el personal del bar se lo da a las mesas (KaraFun no lo muestra). Un QR fotografiado no sirve desde la casa al día siguiente.
 - Límites: pedidos pendientes por mesa, pedidos por minuto por mesa e IP, longitud del nombre del cantante.
 - El nombre del cantante se escapa en todo HTML y en el XML hacia KaraFun.
 - El puerto 57570 se cierra a la red con el Firewall de Windows: solo `127.0.0.1`.

@@ -97,7 +97,7 @@ Diseño completo en `docs/karaoke-arquitectura.md`; el acuerdo con el agente del
 | Paso | Dónde |
 |---|---|
 | Crear las mesas (número y nombre) e imprimir sus QR | Panel → Karaoke → Mesas → **Ver e imprimir QR** (o «Imprimir los QR de todas las mesas activas»). El QR no cambia al renombrar la mesa. |
-| Abrir la noche | **Abrir noche** genera un código de 4 números. Muéstralo en la pantalla del karaoke: sin él, un QR fotografiado no sirve desde la casa. La noche se cierra sola a las 14 h. |
+| Abrir la noche | **Abrir noche** genera un código de 4 números; el personal del bar se lo da a las mesas (lo genera el panel, KaraFun no lo muestra). Sin él, un QR fotografiado no sirve desde la casa. La noche se cierra sola a las 14 h. |
 | Durante la noche | La pestaña se actualiza cada 5 s: lo que está en KaraFun, la lista de espera (flechas para adelantar o atrasar, **Cancelar**), los fallidos con su motivo, el estado del agente y cuántas canciones hay en «Por aprobar». |
 | Si el código se filtra | **Cambiar código**: los celulares lo vuelven a pedir. |
 | Al terminar | **Cerrar noche**: se cancelan los pedidos que esperaban; lo que ya está en KaraFun sigue sonando. |

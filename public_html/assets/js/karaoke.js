@@ -82,7 +82,7 @@
       const hadCode = store.get(KEY_CODE) === code && code !== '';
       store.del(KEY_CODE);
       code = '';
-      showGate(hadCode ? 'El código cambió. Escribe el de la pantalla del karaoke.' : err.message);
+      showGate(hadCode ? 'El código cambió. Pide el nuevo al personal del bar.' : err.message);
       return true;
     }
     if (['no_night', 'table_inactive', 'bad_table'].includes(err.code)) {

@@ -494,7 +494,7 @@ function karaoke_session(PDO $pdo, string $token, string $code, string $limiterK
         if ($limiterKey !== '') {
             karaoke_rate_hit($pdo, $bucket);
         }
-        throw new KaraokeError('El código de la noche no coincide. Míralo en la pantalla del karaoke.', 403, 'bad_code', 'Código equivocado');
+        throw new KaraokeError('El código de la noche no coincide. Pídeselo al personal del bar.', 403, 'bad_code', 'Código equivocado');
     }
     return ['table' => $table, 'night' => $night];
 }

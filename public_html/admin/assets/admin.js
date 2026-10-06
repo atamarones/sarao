@@ -936,7 +936,7 @@
       <section class="card stack k-card">
         <h2 class="card-title">Noche</h2>
         ${night ? `<p class="k-code" aria-label="Código de la noche">${esc(night.code)}</p>
-          <p class="hint">Código de la noche. Muéstralo en la pantalla del karaoke. Abierta desde las ${esc(kTime(night.opens_at))}; se cierra sola a las 14 h.</p>
+          <p class="hint">Código de la noche: dáselo a las mesas que lo pidan (también puedes escribirlo en un tablero visible). Abierta desde las ${esc(kTime(night.opens_at))}; se cierra sola a las 14 h.</p>
           <div class="k-actions"><button class="btn btn-ghost btn-sm" data-act="night-rotate">Cambiar código</button><button class="btn btn-ghost btn-sm" data-act="night-close">Cerrar noche</button></div>`
         : `<p class="muted">El karaoke por mesa está cerrado: las mesas no pueden pedir.</p>
           <div><button class="btn btn-primary" data-act="night-open">Abrir noche</button></div>`}
@@ -1016,7 +1016,7 @@
       if (msg) toast(msg);
       renderKaraokeLive();
     };
-    if (act === 'night-open') return run('karaoke.night.open', {}, 'Noche abierta. Muestra el código en la pantalla.');
+    if (act === 'night-open') return run('karaoke.night.open', {}, 'Noche abierta. Comparte el código con las mesas.');
     if (act === 'night-rotate') {
       if (!(await confirmDialog('¿Cambiar el código?', 'Los celulares que ya entraron tendrán que escribir el nuevo.', 'Cambiar código'))) return;
       return run('karaoke.night.rotate', {}, 'Código cambiado');

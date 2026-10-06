@@ -51,7 +51,6 @@ $s = settings();
   .card .eyebrow { margin: 0; font: 600 12px/1 'Outfit', sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
   .card svg { width: 220px; height: 220px; }
   .card ol { margin: 0; padding-left: 20px; text-align: left; font-size: 14px; }
-  .card small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
   .empty { padding: 40px 16px; text-align: center; }
   @media print {
     body { background: #fff; }
@@ -77,10 +76,9 @@ $s = settings();
     <?= qr_svg($url, 220) ?>
     <ol>
       <li>Escanea con la cámara del celular.</li>
-      <li>Escribe el código de la noche (está en la pantalla).</li>
+      <li>Pide el código de la noche al personal del bar y escríbelo.</li>
       <li>Busca tu canción y pídela.</li>
     </ol>
-    <small><?= e($url) ?></small>
   </section>
   <?php endforeach; ?>
 </main>

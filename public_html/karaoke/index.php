@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Página de mesa del karaoke (QR impreso → /karaoke/?m=<token>). Sin login: el token del QR
- * identifica la mesa y el código de la noche, que se ve en la pantalla del karaoke, abre los pedidos.
+ * identifica la mesa y el código de la noche, que genera el panel y da el personal del bar, abre los pedidos.
  */
 
 require __DIR__ . '/../app/bootstrap.php';
@@ -62,7 +62,7 @@ $v = static fn (string $f): int => (int) @filemtime(__DIR__ . '/../assets/' . $f
 <main id="kk" class="kk-main" data-token="<?= e($token) ?>">
   <section class="kk-gate" id="kk-gate" aria-labelledby="gate-title" hidden>
     <h2 id="gate-title" class="kk-h2">Código de la noche</h2>
-    <p class="kk-muted">Está en la pantalla del karaoke. Cambia cada noche.</p>
+    <p class="kk-muted">Pídeselo al personal del bar. Cambia cada noche.</p>
     <form id="gate-form" class="kk-gate-form" novalidate>
       <label class="sr-only" for="gate-code">Código de 4 números</label>
       <input id="gate-code" class="kk-code" inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="one-time-code" placeholder="0000" required>
