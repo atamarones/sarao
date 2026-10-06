@@ -1,6 +1,6 @@
 # Contrato nube ↔ agente del bar
 
-**Versión:** 1 · **Fecha:** 2026-10-06 · Complementa `docs/karaoke-arquitectura.md` (§8).
+**Versión:** 1.1 · **Fecha:** 2026-10-06 · Complementa `docs/karaoke-arquitectura.md` (§8).
 
 La nube (PHP en Hostinger) es la fuente de verdad. El agente (PC del bar) **solo hace peticiones salientes por HTTPS** y obedece órdenes. Este documento es el acuerdo entre las dos partes: si algo cambia aquí, cambia en ambos lados.
 
@@ -32,7 +32,7 @@ Respuesta:
   "server_time": "2026-10-06T21:15:00-05:00",
   "commands": [
     { "id": 812, "type": "enqueue", "lease_until": "2026-10-06T21:15:30-05:00",
-      "payload": { "request_id": "9f1c…", "song": { "natural_key": "…", "title": "…", "artist": "…", "duration_s": 228 },
+      "payload": { "request_id": "9f1c…", "song": { "natural_key": "…", "title": "…", "artist": "…", "duration_s": 228, "source": "local" },
                    "singer": "Ana · M7·k3f" } }
   ]
 }
@@ -69,16 +69,23 @@ Canción:
   (Aclarado el 2026-10-06: la versión anterior decía "redondeada a 5 s", lo que contradecía este ejemplo; vale el ejemplo.)
 - `folder = "Por aprobar"` marca canciones descargadas de YouTube que el encargado todavía no revisó.
 
+### Catálogo en línea de KaraFun (v1.1)
+
+El catálogo en línea (~90 mil canciones, ids positivos y estables) **no lo sube el agente**: el encargado sube en el panel el CSV que exporta KaraFun (`Id;Title;Artist;…`). Esas canciones quedan con `source = "karafun"`, su `kf_id` y `natural_key = "karafun:<kf_id>"` (no llevan duración). Las mesas buscan en las dos fuentes; las de la carpeta local salen primero.
+
 ### `song.upsert` — una canción suelta (tras una descarga)
 
 `{ "song": { …mismo formato… } }` → inserta o actualiza sin tocar el resto del catálogo.
 
 ## 3. Órdenes (`type`)
 
+Cambios de la v1.1 (aditivos: un agente v1 sigue funcionando con las canciones locales): `enqueue.payload.song` lleva `source` siempre y `kf_id` cuando `source = "karafun"`.
+
+
 | type | payload | qué hace el agente | `result` en el ack |
 |---|---|---|---|
 | `download` | `request_id`, `youtube_id`, `max_duration_s` (480) | Comprueba metadatos con yt-dlp (no directos, duración ≤ máximo), descarga mp4 ≤ 720p a `Música\Karaoke\Por aprobar\Artista - Título [youtube_id].mp4`, hace que KaraFun lo vea y sube la canción con `song.upsert` | `{ youtube_id, song: {…} }` |
-| `enqueue` | `request_id`, `song`, `singer` | Añade la canción al final de la cola de KaraFun con ese cantante | `{ queue_pos }` |
+| `enqueue` | `request_id`, `song`, `singer` | Añade la canción al final de la cola de KaraFun con ese cantante. `song.source` (v1.1) dice de dónde es: `"local"` → la resuelve con `search` como en v1; `"karafun"` → trae además `song.kf_id` y la añade directamente con `addToQueue song="<kf_id>"`, sin buscar | `{ queue_pos }` |
 | `remove` | `request_id`, `singer` | Quita de la cola de KaraFun la entrada con ese cantante (marcador) si aún no ha sonado | `{ removed: true/false }` |
 | `catalog.resync` | — | Relee la carpeta y sube el catálogo completo (§2) | `{ total_songs }` |
 

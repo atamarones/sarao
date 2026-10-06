@@ -322,7 +322,7 @@ eq(count($out['commands']), 3, 'cola vacía: 3 órdenes enqueue');
 eq(array_column($out['commands'], 'type'), ['enqueue', 'enqueue', 'enqueue'], 'tipo enqueue');
 $c0 = $out['commands'][0];
 eq($c0['payload']['request_id'], $ids[0], 'la primera orden es el primer turno');
-eq($c0['payload']['song'], ['natural_key' => 'juanes|a dios le pido|215', 'title' => 'A Dios le pido', 'artist' => 'Juanes', 'duration_s' => 215], 'payload.song según el contrato');
+eq($c0['payload']['song'], ['natural_key' => 'juanes|a dios le pido|215', 'title' => 'A Dios le pido', 'artist' => 'Juanes', 'duration_s' => 215, 'source' => 'local'], 'payload.song según el contrato (v1.1: source, sin kf_id si es local)');
 eq($c0['payload']['singer'], 'Ana · ' . karaoke_request($pdo, $ids[0])['marker'], 'payload.singer con marcador');
 check((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d-05:00$/', $c0['lease_until']), 'lease_until en ISO 8601 con zona de Bogotá');
 eq(status_of($pdo, $ids[0]), 'enviado', 'pedido enviado');
@@ -587,6 +587,62 @@ eq($st->fetchColumn(), 'A', 'duplicada en Por aprobar y en su letra: gana la car
 eq((int) $pdo->query('SELECT COUNT(*) FROM karaoke_catalog_staging')->fetchColumn(), 0, 'staging vacío tras el commit');
 $w = karaoke_agent_dispatch($pdo, 'song.upsert', ['song' => ['natural_key' => 'otra|cosa|1'] + song('X', 'Y', 1)]);
 check(isset($w['warnings']['natural_key_mismatch']), 'aviso si la clave del agente no coincide con la regla');
+
+// ---------------------------------------------------------------------------
+section('Catálogo en línea de KaraFun (CSV) y búsqueda rápida');
+$pdo = fresh_db();
+$night = karaoke_night_open($pdo);
+$t1 = karaoke_table($pdo, karaoke_table_save($pdo, null, 1, ''));
+add_song($pdo, 'Queen', 'Bohemian Rhapsody', 354);
+$csv = tempnam(sys_get_temp_dir(), 'kf');
+file_put_contents($csv, implode("\n", [
+    "\u{FEFF}" . 'Id;Title;Artist;Year;Duo;Explicit;"Date Added";Styles;Languages',
+    '12617;"Bohemian Rhapsody";Queen;1975;0;0;2008-07-21;Rock;English',
+    '5632;"Mr. Brightside";"The Killers";2003;0;0;2016-03-21;Rock;English',
+    '70001;"Corazón; partío";"Alejandro Sanz";1997;0;0;2010-01-01;Pop;Spanish',
+    '70002;"La camisa negra";Juanes;2004;0;0;2010-01-01;Pop;Spanish',
+    '70003;"Camisa";"Otro";2004;0;0;2010-01-01;Pop;Spanish',
+    'abc;Mala;Fila;;;;;;',
+    '70002;"Duplicada";Juanes;2004;0;0;2010-01-01;Pop;Spanish',
+]) . "\n");
+$sum = karaoke_import_karafun_csv($pdo, $csv);
+eq([$sum['songs'], $sum['added'], $sum['skipped']], [5, 5, 2], 'importa 5, salta la fila mala y el id repetido');
+$kf = $pdo->query("SELECT natural_key, kf_id, duration_s FROM karaoke_songs WHERE source = 'karafun' AND kf_id = 70001")->fetch();
+eq($kf, ['natural_key' => 'karafun:70001', 'kf_id' => 70001, 'duration_s' => 0], 'natural_key karafun:<id>, sin duración');
+eq(karaoke_search($pdo, 'corazon partio')[0]['title'], 'Corazón; partío', 'el «;» dentro de comillas no rompe la fila');
+eq(array_column(karaoke_search($pdo, 'bohemian'), 'duration_s'), [354, 0], 'la versión local va antes que la de KaraFun en línea');
+eq(array_column(karaoke_search($pdo, 'camisa'), 'title'), ['Camisa', 'La camisa negra'], 'título exacto primero');
+eq(array_column(karaoke_search($pdo, 'jua cami'), 'title'), ['La camisa negra'], 'prefijos de varias palabras (artista + título)');
+eq(karaoke_search($pdo, 'amisa'), [], 'busca por comienzo de palabra, no por pedazos sueltos');
+eq(karaoke_search($pdo, 'k'), [], 'una sola letra no busca');
+eq(array_column(karaoke_search($pdo, 'killers'), 'artist'), ['The Killers'], 'por artista');
+// Pedido de una canción de KaraFun en línea: el enqueue lleva kf_id.
+$sidKf = karaoke_search($pdo, 'brightside')[0]['id'];
+req($pdo, $t1, $night, ['song_id' => $sidKf]);
+$cmd = poll($pdo, [])['commands'][0];
+eq($cmd['payload']['song'], ['natural_key' => 'karafun:5632', 'title' => 'Mr. Brightside', 'artist' => 'The Killers', 'duration_s' => 0, 'source' => 'karafun', 'kf_id' => 5632], 'enqueue de KaraFun en línea con source y kf_id');
+// Reimportar sin una canción: available = 0; renombrar: se reindexa.
+karaoke_clock(karaoke_clock() + 10);
+file_put_contents($csv, implode("\n", [
+    'Id;Title;Artist',
+    '12617;"Bohemian Rhapsody";Queen',
+    '5632;"Mr. Brightside (Live)";"The Killers"',
+    '70001;"Corazón partío";"Alejandro Sanz"',
+    '70002;"La camisa negra";Juanes',
+]) . "\n");
+$sum = karaoke_import_karafun_csv($pdo, $csv);
+eq([$sum['added'], $sum['updated'], $sum['unavailable']], [0, 2, 1], 'reimportar: 2 cambiadas, 1 desaparecida');
+eq(karaoke_search($pdo, 'camisa')[0]['title'], 'La camisa negra', 'la desaparecida ya no sale');
+eq(karaoke_search($pdo, 'brightside live')[0]['title'], 'Mr. Brightside (Live)', 'el título nuevo se busca');
+eq((int) $pdo->query("SELECT COUNT(*) FROM karaoke_songs WHERE source = 'local' AND available = 1")->fetchColumn(), 1, 'la importación no toca las canciones locales');
+$sync = karaoke_catalog_begin($pdo);
+karaoke_catalog_chunk($pdo, ['sync_id' => $sync['sync_id'], 'index' => 0, 'songs' => [song('Otro', 'Tema', 100)]]);
+karaoke_clock(karaoke_clock() + 10);
+karaoke_catalog_commit($pdo, ['sync_id' => $sync['sync_id'], 'total_chunks' => 1, 'total_songs' => 1]);
+eq((int) $pdo->query("SELECT COUNT(*) FROM karaoke_songs WHERE source = 'karafun' AND available = 1")->fetchColumn(), 4, 'y la sincronización local no toca las de KaraFun');
+file_put_contents($csv, "Nombre,Artista\nx,y\n");
+throws(static fn () => karaoke_import_karafun_csv($pdo, $csv), 'csv_columns', 'un CSV que no es de KaraFun se rechaza');
+unlink($csv);
 
 // ---------------------------------------------------------------------------
 section('Noche: cierre cancela lo pendiente');

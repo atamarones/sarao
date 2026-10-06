@@ -52,6 +52,10 @@ function run_upgrades(PDO $pdo, string $driver): array
         // Promociones que vienen del POS (las creadas a mano en el panel quedan con NULL).
         ['promotions', 'pos_promotion_id', 'VARCHAR(36) NULL'],
     ];
+    // Karaoke: tablas nuevas primero (abajo); estas columnas llegaron después de la primera versión.
+    $karaokeCols = [
+        ['karaoke_songs', 'popularity', 'INT NULL'],
+    ];
     foreach ($cols as [$table, $col, $type]) {
         if (!column_exists($pdo, $driver, $table, $col)) {
             $sql = "ALTER TABLE $table ADD COLUMN $col $type";
@@ -74,6 +78,13 @@ function run_upgrades(PDO $pdo, string $driver): array
             $applied[] = $sql;
         } catch (PDOException) {
             // Ya existe.
+        }
+    }
+    foreach ($karaokeCols as [$table, $col, $type]) {
+        if (!column_exists($pdo, $driver, $table, $col)) {
+            $sql = "ALTER TABLE $table ADD COLUMN $col $type";
+            $pdo->exec($sql);
+            $applied[] = $sql;
         }
     }
     foreach (['CREATE INDEX idx_products_pos ON products (pos_product_id)', 'CREATE INDEX idx_variants_pos ON product_variants (pos_product_id)', 'CREATE INDEX idx_promotions_pos ON promotions (pos_promotion_id)'] as $sql) {

@@ -168,12 +168,21 @@ function karaoke_schema_statements(string $driver): array
             duration_s INT NOT NULL DEFAULT 0,
             search_text VARCHAR(420) NOT NULL,
             kf_id INT NULL,
+            popularity INT NULL,
             folder VARCHAR(120) NULL,
             file VARCHAR(500) NULL,
             available $bool NOT NULL DEFAULT 1,
             seen_at DATETIME NOT NULL,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL
+        )$tail",
+
+        // Índice de palabras para buscar por prefijo en ~100 mil canciones sin recorrer la tabla.
+        "CREATE TABLE IF NOT EXISTS karaoke_song_words (
+            word VARCHAR(40)$bin NOT NULL,
+            song_id $fk NOT NULL,
+            PRIMARY KEY (word, song_id),
+            CONSTRAINT fk_kwords_song FOREIGN KEY (song_id) REFERENCES karaoke_songs(id) ON DELETE CASCADE
         )$tail",
 
         "CREATE TABLE IF NOT EXISTS karaoke_downloads (
@@ -288,6 +297,8 @@ function karaoke_schema_statements(string $driver): array
 
         'CREATE INDEX idx_ksongs_folder ON karaoke_songs (available, folder)',
         'CREATE INDEX idx_ksongs_seen ON karaoke_songs (source, seen_at)',
+        'CREATE INDEX idx_ksongs_kf ON karaoke_songs (source, kf_id)',
+        'CREATE INDEX idx_kwords_song ON karaoke_song_words (song_id)',
         'CREATE INDEX idx_krequests_queue ON karaoke_requests (night_id, status, fair_seq)',
         'CREATE INDEX idx_krequests_table ON karaoke_requests (night_id, table_id, status)',
         'CREATE INDEX idx_krequests_youtube ON karaoke_requests (youtube_id, status)',
