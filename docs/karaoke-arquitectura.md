@@ -1,6 +1,6 @@
 # Karaoke por mesa · arquitectura
 
-**Fecha:** 2026-10-06 · **Estado:** en producción. La nube está publicada en saraopub.com (página de mesa, panel, API del agente; decisiones en §15) y el agente corre en el PC del bar (`agent/`, operación en `docs/karaoke-operacion.md`). Comprobaciones del PC en §14.
+**Fecha:** 2026-10-06 · **Estado:** en producción. La nube está publicada en saraopub.com (página de mesa, panel, API del agente; decisiones en §15) y el agente corre en el PC del bar (`agent/`, operación en `public_html/app/karaoke-operacion.md`, que el panel muestra en su pestaña «Operación»). Comprobaciones del PC en §14.
 
 **Decisiones del negocio (2026-10-06):**
 - Se sigue con **KaraFun Player 2** (2.6.2), no con KaraFun 3: es el único con API local verificada.

@@ -16,7 +16,7 @@ public_html/            ← todo esto se sube a public_html en Hostinger
   carta/index.php       carta pública (QR)
   karaoke/              página de mesa (index.php + api.php) y API del agente del bar (agent.php)
 agent/                  agente del PC del bar (Python): ejecuta las órdenes de la nube en KaraFun Player 2.
-                        Instalación y operación en agent/README.md y docs/karaoke-operacion.md
+                        Instalación en agent/README.md; operación en public_html/app/karaoke-operacion.md (panel → Operación)
 tools/karafun/          consolas de prueba del control remoto de KaraFun (PowerShell)
   install.php           instalador de un solo uso (bórralo después de instalar)
   admin/                panel (index.php, api.php, logout.php, assets/)

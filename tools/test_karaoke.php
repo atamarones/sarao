@@ -11,6 +11,7 @@ date_default_timezone_set('America/Bogota');
 mb_internal_encoding('UTF-8');
 require __DIR__ . '/../public_html/app/schema.php';
 require __DIR__ . '/../public_html/app/karaoke.php';
+require __DIR__ . '/../public_html/app/markdown.php';
 
 $passed = 0;
 $failed = [];
@@ -861,6 +862,33 @@ eq(karaoke_night_close($pdo), 2, 'cerrar la noche cancela lo que esperaba');
 eq(status_of($pdo, $rb), 'cancelado', 'pedido cancelado por el sistema');
 eq(karaoke_current_night($pdo), null, 'sin noche abierta');
 eq(karaoke_fill_buffer($pdo, []), 0, 'sin noche no se envía nada');
+
+// ---------------------------------------------------------------------------
+section('Guía de operación (Markdown del panel)');
+$h = md_to_html("# T
+
+## Al prender
+
+1. Uno **fuerte**
+2. Dos `cmd <x>`
+
+| A | B |
+|---|---|
+| a1 | b1 |
+
+```powershell
+Get-Item 'C:\x' | Out-Null
+```
+
+<script>alert(1)</script> [web](https://saraopub.com) [ruta](../x.md) [js](javascript:alert(1))");
+check(str_contains($h, '<h2 id="al-prender">Al prender</h2>'), 'título con id para el índice');
+check(str_contains($h, '<ol><li>Uno <strong>fuerte</strong></li><li>Dos <code>cmd &lt;x&gt;</code></li></ol>'), 'lista numerada con negrita y código escapado');
+check(str_contains($h, '<td data-label="A">a1</td>'), 'tabla con etiqueta de columna');
+check(str_contains($h, '<pre data-lang="powershell"><code>Get-Item &#039;C:\x&#039; | Out-Null</code></pre>'), 'bloque de código intacto y escapado');
+check(!str_contains($h, '<script') && str_contains($h, '&lt;script&gt;'), 'el HTML del texto se escapa');
+check(str_contains($h, '<a href="https://saraopub.com" target="_blank" rel="noopener">web</a>') && !str_contains($h, 'href="../x.md"') && !str_contains($h, 'javascript:alert(1)"'), 'solo enlaces https');
+$guide = md_to_html((string) file_get_contents(__DIR__ . '/../public_html/app/karaoke-operacion.md'));
+check(substr_count($guide, '<h2 id=') >= 8 && substr_count($guide, '<table>') >= 3 && substr_count($guide, '<pre') >= 5, 'la guía real se convierte completa');
 
 // ---------------------------------------------------------------------------
 karaoke_clock(null, true);

@@ -99,6 +99,7 @@ $v = static fn (string $f): int => (int) @filemtime(__DIR__ . '/assets/' . $f);
     <a href="#promos" data-view="promos">Promos</a>
     <a href="#testimonios" data-view="testimonios">Testimonios</a>
     <a href="#karaoke" data-view="karaoke">Karaoke</a>
+    <a href="#operacion" data-view="operacion">Operación</a>
     <a href="#ajustes" data-view="ajustes">Ajustes</a>
   </nav>
   <div class="topbar-end">

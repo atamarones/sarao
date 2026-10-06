@@ -137,7 +137,7 @@
   }
 
   // ---------- router ----------
-  const views = { productos: renderProducts, categorias: renderCategories, promos: renderPromos, testimonios: renderTestimonials, karaoke: renderKaraoke, ajustes: renderSettings };
+  const views = { productos: renderProducts, categorias: renderCategories, promos: renderPromos, testimonios: renderTestimonials, karaoke: renderKaraoke, operacion: renderHelp, ajustes: renderSettings };
   function route() {
     const name = (location.hash || '#productos').slice(1);
     if (name !== 'karaoke') stopKaraokePolling();
@@ -1067,6 +1067,52 @@
       $('#k-token-out').hidden = false;
       renderKaraokeLive();
     }
+  }
+
+  // ---------- operación (guía para el encargado) ----------
+  async function renderHelp() {
+    view.innerHTML = `<div class="view-head"><div><h1>Operación</h1><p class="muted">Qué hacer cada noche y cuando algo falla en el karaoke.</p></div></div><p class="loading">Cargando la guía…</p>`;
+    let data;
+    try {
+      const res = await fetch('api.php?action=karaoke.help', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      if (res.status === 401) { location.reload(); return; }
+      data = await res.json();
+      if (!res.ok || !data.html) throw new Error(data.detail || 'La guía no está disponible.');
+    } catch (err) {
+      $('.loading', view).outerHTML = `<div class="alert alert-error" role="alert">${esc(err.message)}</div>`;
+      return;
+    }
+    if ((location.hash || '').slice(1) !== 'operacion') return;
+    // data.html viene del servidor ya escapado (app/markdown.php): solo trae las etiquetas de la guía.
+    view.innerHTML = `
+      <div class="view-head"><div><h1>Operación</h1><p class="muted">Qué hacer cada noche y cuando algo falla en el karaoke.</p></div></div>
+      <nav class="help-toc card" aria-label="Secciones de la guía"></nav>
+      <article class="card help-doc">${data.html}</article>`;
+    const doc = $('.help-doc', view);
+    const title = $('h1', doc);
+    if (title) title.remove();
+    const toc = $('.help-toc', view);
+    $$('h2[id]', doc).forEach((h) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-ghost btn-sm';
+      b.textContent = h.textContent;
+      b.addEventListener('click', () => { h.scrollIntoView({ behavior: 'smooth', block: 'start' }); h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); });
+      toc.append(b);
+    });
+    $$('pre', doc).forEach((pre) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-ghost btn-sm help-copy';
+      b.textContent = 'Copiar';
+      b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(pre.textContent); toast('Comando copiado'); } catch { toast('Selecciónalo y cópialo a mano', 'error'); }
+      });
+      const wrap = document.createElement('div');
+      wrap.className = 'help-code';
+      pre.replaceWith(wrap);
+      wrap.append(pre, b);
+    });
   }
 
   // ---------- inicio ----------

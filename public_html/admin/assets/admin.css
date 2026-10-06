@@ -282,3 +282,33 @@ legend { padding: 0 6px; font-size: 13px; color: var(--muted); }
   .k-add-row { grid-template-columns: 140px minmax(0, 1fr) auto; }
   .k-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ---------- Operación (guía) ---------- */
+.help-toc { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.help-toc .btn { white-space: normal; text-align: left; max-width: 100%; height: auto; padding-block: 6px; }
+.help-doc { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; line-height: 1.6; min-width: 0; }
+.help-doc h2 { font: 800 26px/1.1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin-top: 18px; scroll-margin-top: 96px; }
+.help-doc h2:first-child { margin-top: 0; }
+.help-doc h3 { font-size: 17px; font-weight: 600; }
+.help-doc p, .help-doc li { color: var(--paper); }
+.help-doc ol, .help-doc ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.help-doc ul { list-style: disc; }
+.help-doc strong { color: var(--crown); font-weight: 600; }
+.help-doc code { font: 500 13px/1.4 ui-monospace, Consolas, monospace; background: var(--night-3); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+.help-code { position: relative; }
+.help-code pre { margin: 0; padding: 14px 16px; padding-right: 96px; border-radius: 12px; background: var(--night); border: 1px solid var(--line); overflow-x: auto; }
+.help-code pre code { background: none; padding: 0; white-space: pre; }
+.help-copy { position: absolute; top: 8px; right: 8px; }
+.md-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+.md-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.md-table th, .md-table td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.md-table th { color: var(--muted); font-weight: 600; background: var(--night-3); }
+.md-table tr:last-child td { border-bottom: 0; }
+@media (max-width: 719px) {
+  .md-table table, .md-table thead, .md-table tbody, .md-table tr, .md-table th, .md-table td { display: block; }
+  .md-table thead { display: none; }
+  .md-table tr { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .md-table td { padding: 3px 0; border: 0; }
+  .md-table td:first-child { font-weight: 600; }
+  .md-table td:not(:first-child)::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 600; }
+}

@@ -11,6 +11,7 @@ require __DIR__ . '/../app/menu.php';
 require __DIR__ . '/../app/upgrade.php';
 require __DIR__ . '/../app/pos_sync.php';
 require __DIR__ . '/../app/karaoke.php';
+require __DIR__ . '/../app/markdown.php';
 
 security_headers();
 header('Cache-Control: no-store');
@@ -660,6 +661,11 @@ try {
             respond(['ok' => true]);
 
         // ----- Karaoke por mesa -----
+        case 'GET karaoke.help':
+            // Guía de operación (app/karaoke-operacion.md), convertida a HTML con todo el texto escapado.
+            $file = __DIR__ . '/../app/karaoke-operacion.md';
+            respond(['html' => is_file($file) ? md_to_html((string) file_get_contents($file)) : '', 'updated_at' => is_file($file) ? date('c', (int) filemtime($file)) : null]);
+
         case 'GET karaoke.state':
             karaoke_migrate_search_text($pdo);
             respond(karaoke_state());
