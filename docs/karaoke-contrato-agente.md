@@ -62,7 +62,7 @@ Canción:
   "folder": "A", "file": "A/Adriana Lucia - Quisiera olvidarte.mp4" }
 ```
 - `natural_key` = `artista|título|duración`. La calcula el agente y la nube la usa como identidad (la guarda tal cual, sin recalcularla). Regla exacta, la misma en los dos lados:
-  1. Artista y título se normalizan así: minúsculas; se quitan tildes y diéresis (`á→a`, `ü→u`) y `ñ→n`; todo carácter que no sea `a-z` o `0-9` pasa a espacio; los espacios seguidos se reducen a uno y se recortan los extremos.
+  1. Artista y título se normalizan así: minúsculas; se quitan tildes y diéresis (`á→a`, `ü→u`) y `ñ→n` (equivale a descomponer en Unicode NFD y quitar las marcas combinantes; en Python, `unicodedata.normalize('NFD', s)` y descartar los caracteres con `unicodedata.combining(c)`); todo carácter que no sea `a-z` o `0-9` pasa a espacio; los espacios seguidos se reducen a uno y se recortan los extremos.
   2. Duración: segundos enteros, **sin redondear a 5 s** (los decimales se redondean al segundo más cercano). Si se desconoce, `0`.
   3. Se unen con `|` en el orden artista, título, duración.
   Ejemplo: `Adriana Lucía` · `¡Quisiera olvidarte!` · 187 s → `adriana lucia|quisiera olvidarte|187`.
