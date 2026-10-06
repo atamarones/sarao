@@ -520,8 +520,8 @@ function karaoke_set_words(PDO $pdo, int $songId, string $searchText): void
 /**
  * Búsqueda de las mesas por nombre de canción y/o artista, rápida con ~100 mil canciones:
  * la palabra más larga se busca por prefijo en el índice karaoke_song_words (un rango, no un
- * recorrido) y las demás filtran ese grupo pequeño. Primero las canciones de la carpeta local,
- * luego las de KaraFun en línea; dentro, las que coinciden mejor con el título.
+ * recorrido) y las demás filtran ese grupo pequeño. Primero las de KaraFun en línea que coinciden,
+ * luego las de la carpeta local; dentro de cada grupo, las que coinciden mejor con el título.
  */
 function karaoke_search(PDO $pdo, string $q, int $limit = 30): array
 {
@@ -547,7 +547,7 @@ function karaoke_search(PDO $pdo, string $q, int $limit = 30): array
         }
     }
     $st = $pdo->prepare("SELECT s.id, s.title, s.artist, s.duration_s, s.folder, s.source, s.popularity FROM karaoke_songs s
-        WHERE $where ORDER BY CASE WHEN s.source = 'local' THEN 0 ELSE 1 END, COALESCE(s.popularity, 999999999), s.id LIMIT 400");
+        WHERE $where ORDER BY CASE WHEN s.source = 'karafun' THEN 0 ELSE 1 END, COALESCE(s.popularity, 999999999), s.id LIMIT 400");
     $st->execute($params);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
 
@@ -555,7 +555,7 @@ function karaoke_search(PDO $pdo, string $q, int $limit = 30): array
     foreach ($rows as $s) {
         $title = karaoke_normalize($s['title']);
         $artist = karaoke_normalize($s['artist']);
-        $score = $s['source'] === 'local' ? 1000 : 0;
+        $score = $s['source'] === 'karafun' ? 1000 : 0;
         if ($title === $norm) {
             $score += 300;
         } elseif ($artist === $norm) {

@@ -98,7 +98,7 @@ Diseño completo en `docs/karaoke-arquitectura.md`; el acuerdo con el agente del
 | Si el código se filtra | **Cambiar código**: los celulares lo vuelven a pedir. |
 | Al terminar | **Cerrar noche**: se cancelan los pedidos que esperaban; lo que ya está en KaraFun sigue sonando. |
 
-Las mesas buscan por canción o artista (primero la carpeta local del bar, luego el catálogo en línea de KaraFun), piden con el nombre de quien canta y ven su turno estimado. Si la canción no está, pegan un enlace de YouTube: solo se acepta un enlace de video (`youtube.com/watch?v=`, `youtu.be/`, `/shorts/`), nunca texto libre. Límites por defecto, editables en el panel: 3 canciones esperando por mesa, 4 pedidos por minuto por mesa y 6 por celular. KaraFun recibe como mucho la canción que suena y 2 más; la rotación entre mesas vive en la nube.
+Las mesas buscan por canción o artista (primero lo que coincide en el catálogo en línea de KaraFun, luego la carpeta local del bar; cada resultado lleva su etiqueta «KaraFun» o «Local»), piden con el nombre de quien canta y ven su turno estimado. Si la canción no está, pegan un enlace de YouTube: solo se acepta un enlace de video (`youtube.com/watch?v=`, `youtu.be/`, `/shorts/`), nunca texto libre. Límites por defecto, editables en el panel: 3 canciones esperando por mesa, 4 pedidos por minuto por mesa y 6 por celular. KaraFun recibe como mucho la canción que suena y 2 más; la rotación entre mesas vive en la nube.
 
 ### Probar el karaoke en local
 
