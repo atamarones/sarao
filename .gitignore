@@ -19,3 +19,9 @@ desktop.ini
 dist/
 videos/
 preview/
+
+# Agente del bar: entorno de Python, configuración con el token y datos locales
+agent/.venv/
+agent/config.json
+agent/data/
+__pycache__/

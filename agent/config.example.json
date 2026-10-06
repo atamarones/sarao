@@ -1,0 +1,12 @@
+{
+  "cloud_url": "https://saraopub.com/karaoke/agent.php",
+  "karaoke_dir": "C:\\Users\\Sarao Pub\\Music\\Karaoke",
+  "pending_dir": "C:\\Users\\Sarao Pub\\Music\\Karaoke\\Por aprobar",
+  "karafun_folder_name": "Karaoke",
+  "karafun_exe": "C:\\Program Files (x86)\\KaraFun Player 2\\KaraFunPlayer.exe",
+  "karafun_ws": "ws://127.0.0.1:57570/",
+  "ytdlp": "C:\\Users\\Sarao Pub\\AppData\\Local\\Microsoft\\WinGet\\Packages\\yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe\\yt-dlp.exe",
+  "max_duration_s": 480,
+  "poll_interval_s": 2,
+  "online_sync_days": 0
+}

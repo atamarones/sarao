@@ -1,6 +1,6 @@
 # Karaoke por mesa · arquitectura
 
-**Fecha:** 2026-10-06 · **Estado:** parte en la nube implementada (página de mesa, panel, API del agente; ver §15). Falta el agente del PC del bar; comprobaciones en el PC casi completas (§14).
+**Fecha:** 2026-10-06 · **Estado:** en producción. La nube está publicada en saraopub.com (página de mesa, panel, API del agente; decisiones en §15) y el agente corre en el PC del bar (`agent/`, operación en `docs/karaoke-operacion.md`). Comprobaciones del PC en §14.
 
 **Decisiones del negocio (2026-10-06):**
 - Se sigue con **KaraFun Player 2** (2.6.2), no con KaraFun 3: es el único con API local verificada.
@@ -87,7 +87,7 @@ karaoke_commands     outbox hacia el agente: id, request_id NULL, type, payload 
 karaoke_agent        latido: last_seen_at, version, kf_connected, kf_state, queue_snapshot (JSON)
 ```
 
-`kf_id` de las canciones locales **no se usa como identidad**. Se conserva al reiniciar KaraFun (verificado: 2614 de 2614 iguales), pero **cambia al pulsar Actualizar** (tras el arreglo del 2026-10-06 cambiaron todos) y la misma canción puede existir en varios archivos con ids distintos. La identidad es `natural_key` = `artista|título` normalizados, sin duración (contrato v2 §2: KaraFun da la duración en 0 hasta analizar el archivo); las de KaraFun en línea, `kf:<id>`. El agente vuelve a resolver el id justo antes de añadir a la cola.
+`kf_id` de las canciones locales **no se usa como identidad**. Se conserva al reiniciar KaraFun (verificado: 2614 de 2614 iguales), pero **cambia al pulsar Actualizar** (tras el arreglo del 2026-10-06 cambiaron todos) y la misma canción puede existir en varios archivos con ids distintos. La identidad es `natural_key` = título + artista + duración normalizados. El agente vuelve a resolver el id justo antes de añadir a la cola.
 
 ## 6. Ciclo de vida de un pedido
 
@@ -199,9 +199,21 @@ Las horas siempre las pone el servidor (hora de Bogotá), nunca el celular ni el
 | 1 | ¿Los ids de KaraFun se mantienen al reiniciar? | ✅ Sí, 2614 de 2614. Cambian al pulsar Actualizar (§5). |
 | 2 | ¿KaraFun detecta solo un mp4 nuevo? | ❌ No. Hace falta Actualizar (§4). |
 | 3 | ¿Por qué KaraFun veía 2614 de 3759 videos? | ✅ Índice congelado desde el 2 de octubre por el fallo de Actualizar (§4). **Arreglado:** KaraFun ve 3759 y todas las rutas existen. |
-| 4 | Descarga con `yt-dlp` a `Por aprobar`, Actualizar y encolar | ⏳ Pendiente. Falta ver también qué título y artista asigna KaraFun a un mp4 descargado (¿nombre de archivo o metadatos?). |
-| 5 | Lenguaje del agente | ⏳ El PC no tiene Python, PHP, Node ni .NET (solo PowerShell 5.1). Recomendado: **Python** (yt-dlp es Python, buena librería WebSocket, se instala como servicio con NSSM). |
+| 4 | Descarga con `yt-dlp` a `Por aprobar` y encolar | ✅ Consulta 10 s + descarga 9 s (mp4 720p, 5,7 MB). **No hace falta Actualizar:** abrir `KaraFunPlayer.exe "<ruta>"` añade el archivo al final de la cola sin reproducirlo (pero sin cantante). KaraFun toma artista y título del nombre del archivo (`Artista - Título [id]`). |
+| 5 | Lenguaje del agente | ✅ Python 3.12 (`agent/`). Tarea programada al iniciar sesión, no servicio de Windows: KaraFun es una aplicación de escritorio y el agente necesita la sesión del usuario para abrirlo y pulsar sus avisos. |
+| 7 | Catálogo en línea de KaraFun | ✅ «Todas las canciones» nunca responde (>150 s); recorriendo sus 36 categorías salen 89 208 canciones en ~2 min. |
 | 6 | Límites de Hostinger para ~10 mesas cada 3 s + el agente cada 1–2 s | ⏳ Se mide cuando exista la página. |
+
+### Cierres de KaraFun (investigación del 2026-10-06)
+
+| Tipo | Huella (WER) | Historia | Causa | Medida |
+|---|---|---|---|---|
+| Cierre por fallo (APPCRASH, `0x40000015`) | `387df47851` en `libremoteosd_plugin.dll` + `64c95545f0` en `libcef.dll` | abr-2025 ×1, ago-2025 ×1, **ene-2026 ×14**, 6-oct-2026 ×9 (antes de reinstalar) | Bug **previo al proyecto** en un filtro de VLC para VNC que KaraFun no usa (`plugins\video_filter\libremoteosd_plugin.dll`, 2019). Más frecuente con mucha actividad del control remoto (búsquedas). | Desactivar el filtro (renombrarlo, requiere administrador). Activar volcados locales para confirmar con la pila. |
+| Congelamiento (AppHang) | distinta cada vez | 6 entre feb-2025 y feb-2026; 1 el 6-oct 15:22 | No determinada (sin volcado). El del 6-oct ocurrió al pasar de una canción en línea transmitida (57136, Sabina, que antes había fallado con `cantplay`) a una local sana (Pies descalzos). | Volcados; el agente ya no satura el control remoto. |
+| Cierre forzado por el agente | — | 6-oct 15:27 | **Bug del agente**: el vigilante lo cerró con un solo «no responde» aislado. | Corregido: exige 90 s sin control remoto + 3 «no responde» seguidos. |
+| Carga excesiva del agente | — | 6-oct 15:30–15:35 | **Bug del agente**: `state.json` con BOM no se leía → volvió a recorrer el catálogo en línea (hasta 1009 peticiones/min). | Corregido: lee con BOM; recorrido en línea desactivado (la nube carga `karafuncatalog.csv`); pausas entre páginas; estado cada 5 s. |
+
+**Cola vieja tras un reinicio:** KaraFun solo guarda su cola (`FileQueue.kplst`) al cerrarse bien; tras una caída recarga la de la última vez (el 6-oct, la de las 14:08). El agente ahora detecta el reinicio (pid + hora de arranque), vacía esa cola vieja y la nube reenvía los pedidos en orden, empezando por el que se estaba cantando (contrato §2, `karafun.session`).
 
 Otros hallazgos: 4 mp4 dañados de menos de 50 bytes (`Corregir\Kaleth Morales - Destrozaste Mi Alma.mp4`, `G\Guayacan Orquesta - Cada dia que pasa.mp4`, `M\Maluma - ADMV.mp4` y uno en `Repetidos`). La carpeta `Descargas` ya no tiene videos; su índice en KaraFun quedó vacío.
 

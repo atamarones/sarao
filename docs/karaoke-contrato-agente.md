@@ -4,7 +4,7 @@
 
 Cambios respecto a la versión 1: `natural_key` ya no incluye la duración; las canciones llevan `source` (`local` o `karafun`) y el catálogo en línea de KaraFun también se sincroniza; una canción descargada puede entrar a la cola sin cantante (`singer_shown: false`).
 
-**URL de producción del agente:** `https://karaoke.saraopub.com/karaoke/agent.php` (configurable en el agente si la ruta cambia).
+**URL de producción del agente:** `https://saraopub.com/karaoke/agent.php` (publicada y verificada el 2026-10-06: sin token responde `401` con `application/problem+json`). El subdominio `karaoke.saraopub.com` no existe; no usarlo. La URL es configurable en el agente (`agent/config.json` → `cloud_url`).
 
 La nube (PHP en Hostinger) es la fuente de verdad. El agente (PC del bar) **solo hace peticiones salientes por HTTPS** y obedece órdenes. Este documento es el acuerdo entre las dos partes: si algo cambia aquí, cambia en ambos lados.
 
@@ -33,6 +33,11 @@ Petición:
 ```
 - `working`: ids de órdenes que el agente tiene en marcha (una descarga tarda 10–60 s). La nube **extiende el lease 30 s** de cada una y no las reentrega mientras sigan apareciendo aquí.
 - `karafun.connected: false` o `running: false` significa que KaraFun no está disponible: la nube no debe emitir órdenes `enqueue`/`remove` hasta que vuelva.
+- `karafun.session` identifica la ejecución actual de KaraFun (pid + hora de arranque) y `karafun.started_at` cuándo la vio el agente. **Si `session` cambia, KaraFun se reinició** (se cayó, se colgó o es un día nuevo). Qué pasa entonces:
+  - KaraFun solo guarda su cola en disco al cerrarse bien; tras una caída recarga una cola **vieja** (ya cantadas, sin las pendientes). El agente la **vacía** antes de informar la sesión nueva (si KaraFun ya está reproduciendo algo, no la toca).
+  - La nube debe **volver a enviar `enqueue`** de los pedidos que estaban en KaraFun (`enviado`, `en_cola`), en su orden, **empezando por el que estaba `cantando`**: ese cliente se quedó a mitad de su canción y debe volver a cantar primero. Cada reenvío es una orden nueva (id nuevo); no reutilizar ids ya confirmados.
+  - Mientras el agente atiende el reinicio informa `connected: false`; la nube espera a `connected: true` con la sesión nueva.
+  - Las entradas que desaparecen de la cola **por un reinicio** no son `retirado` (no las quitó el encargado): no marcarlas así.
 Respuesta:
 ```json
 {
@@ -72,9 +77,40 @@ Canción:
 { "natural_key": "kf:76237", "source": "karafun", "kf_id": 76237,
   "title": "Caballero", "artist": "Alejandro Fernández", "duration_s": 228, "folder": null, "youtube_id": null }
 ```
-- Canciones locales: `natural_key` = artista + `|` + título, normalizados (minúsculas, sin tildes, todo lo que no sea letra o número pasa a espacio, espacios simples). **Sin duración:** KaraFun la reporta en 0 hasta que analiza el archivo. Dos archivos con el mismo artista y título son la misma canción para el cliente.
+- Canciones locales: `natural_key` = `normalizar(artista_sin_versión)` + `|` + `normalizar(título)`. **Sin duración:** KaraFun la reporta en 0 hasta que analiza el archivo. Dos archivos con el mismo artista y título son la misma canción para el cliente.
+  - `normalizar`: minúsculas (casefold) → **NFKD** → quitar marcas combinantes → todo lo que no sea `[0-9a-z]` pasa a espacio → espacios simples, sin bordes. Es NFKD y no NFD a propósito: `5ª` → `5a`, `Nº` → `no`, `²` → `2`, como la gente lo escribe al buscar (con NFD `La 5ª Estación` daría `la 5 estacion`).
+  - `artista_sin_versión`: se quita un prefijo `v<1-2 dígitos>` + espacio al inicio. Las segundas versiones de un archivo se guardan como `v2 Adele - Make You Feel My Love` (carpeta Repetidos, ~250 archivos) y son la misma canción que el original. El agente sube el **artista ya limpio** y una sola entrada por canción, prefiriendo el archivo original.
+  - Ejemplos que ambos lados deben reproducir:
+
+    | artista | título | natural_key |
+    |---|---|---|
+    | `La 5ª Estación` | `Me Dueles` | `la 5a estacion\|me dueles` |
+    | `v2 Adele` | `Make You Feel My Love` | `adele\|make you feel my love` |
+    | `Ana & Jaime` | `DECIMO GRADO` | `ana jaime\|decimo grado` |
+    | `Adriana Lucía` | `En Los Días Que Te Quise!` | `adriana lucia\|en los dias que te quise` |
+
+  - Equivalente en PHP (requiere la extensión `intl`: comprobar `extension_loaded('intl')` en el servidor y activarla en hPanel → Configuración de PHP si falta):
+    ```php
+    function karaoke_normalize(string $s): string {
+        $s = Normalizer::normalize(mb_strtolower($s, 'UTF-8'), Normalizer::FORM_KD);
+        $s = preg_replace('/\p{Mn}+/u', '', $s);          // quita tildes y demás marcas
+        $s = preg_replace('/[^0-9a-z]+/', ' ', $s);        // solo letras y números ASCII
+        return trim(preg_replace('/\s+/', ' ', $s));
+    }
+    function karaoke_natural_key(string $artist, string $title): string {
+        $artist = preg_replace('/^\s*v\d{1,2}\s+(?=\S)/i', '', $artist);
+        return karaoke_normalize($artist) . '|' . karaoke_normalize($title);
+    }
+    ```
+  - La nube guarda la clave que manda el agente y no necesita recalcularla; solo debe usar la misma normalización para el texto de búsqueda, para que buscar `5a estacion` encuentre `La 5ª Estación`.
 - Canciones de KaraFun en línea: `natural_key` = `kf:<id>`; su id sí es estable.
 - `duration_s` es informativa y puede ser 0.
+- `file` (opcional, solo locales): ruta relativa a `Música\Karaoke` con `/` (`A/Adriana Lucia - Quisiera olvidarte.mp4`). La nube la guarda y la devuelve en `song` de cada `enqueue`: si KaraFun no encuentra la canción por nombre (unos pocos archivos los muestra con los datos internos del video), el agente la añade por esa ruta. El agente rechaza rutas fuera de la carpeta de karaoke.
+
+**Carga inicial por CSV** (alternativa a esperar la primera sincronización):
+- `karafuncatalog.csv` (exportado de KaraFun): `Id;Title;Artist;Year;Duo;Explicit;"Date Added";Styles;Languages` → canciones `source = karafun`, `natural_key = kf:<Id>`, `kf_id = Id`. Esos ids son los mismos que usa la API de KaraFun Player 2.
+- `karaoke-catalogo-local.csv` (lo genera `agent/export_local_catalog.py`): mismas 9 columnas + `Duration;Folder;File;NaturalKey;YoutubeId` → canciones `source = local` con `natural_key = NaturalKey`. `Id` es un hash estable con prefijo `L`, útil como id público pero no como identidad.
+- Ambos: UTF-8 sin BOM, separador `;`, comillas solo cuando hacen falta.
 - `folder = "Por aprobar"` marca canciones descargadas de YouTube que el encargado todavía no revisó; `youtube_id` se rellena en esas.
 
 ### `song.upsert` — una canción suelta (tras una descarga)
