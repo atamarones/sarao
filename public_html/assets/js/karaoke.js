@@ -201,7 +201,9 @@
     const main = el('div', 'kk-song-main');
     main.append(el('p', 'kk-song-title', s.title));
     const meta = el('p', 'kk-song-meta', [s.artist, mmss(s.duration_s)].filter(Boolean).join(' · '));
-    if (s.from_youtube) meta.append(el('span', 'kk-tag', 'YouTube'));
+    // Origen: «Local» = archivo en el PC del bar; «KaraFun» = catálogo en línea de KaraFun.
+    meta.prepend(el('span', `kk-tag kk-src-${s.source === 'local' ? 'local' : 'karafun'}`, s.source === 'local' ? 'Local' : 'KaraFun'));
+    if (s.from_youtube) meta.append(el('span', 'kk-tag kk-src-youtube', 'YouTube'));
     main.append(meta);
     const b = el('button', 'kk-btn kk-btn-small', 'Pedir');
     b.type = 'button';

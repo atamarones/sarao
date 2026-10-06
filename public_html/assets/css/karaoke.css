@@ -78,6 +78,10 @@
 .kk-song-title { font-weight: 600; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
 .kk-song-meta { color: var(--muted); font-size: 13px; margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow-wrap: anywhere; }
 .kk-tag { font: 600 10px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--crown); background: rgba(248, 184, 0, .12); padding: 3px 6px; border-radius: 5px; }
+/* Origen de la canción: local (dorado de la corona) o KaraFun en línea (violeta del logo). */
+.kk-src-local { color: var(--crown); background: rgba(248, 184, 0, .14); }
+.kk-src-karafun { color: #CFC6FF; background: rgba(107, 77, 255, .24); }
+.kk-src-youtube { color: #FF9C88; background: rgba(255, 38, 0, .14); }
 
 /* ---------- Enlace de YouTube ---------- */
 .kk-steps { margin: 10px var(--gutter) 16px; padding-left: 20px; color: var(--muted); font-size: 14px; display: grid; gap: 4px; }

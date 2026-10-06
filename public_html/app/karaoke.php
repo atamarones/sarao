@@ -581,6 +581,7 @@ function karaoke_search(PDO $pdo, string $q, int $limit = 30): array
         'title' => $r[3]['title'],
         'artist' => $r[3]['artist'],
         'duration_s' => (int) $r[3]['duration_s'],
+        'source' => $r[3]['source'],
         'from_youtube' => karaoke_is_por_aprobar($r[3]['folder']),
     ], array_slice($ranked, 0, max(1, min(50, $limit))));
 }

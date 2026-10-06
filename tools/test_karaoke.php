@@ -711,6 +711,7 @@ $kf = $pdo->query("SELECT natural_key, kf_id, duration_s FROM karaoke_songs WHER
 eq($kf, ['natural_key' => 'kf:70001', 'kf_id' => 70001, 'duration_s' => 0], 'natural_key kf:<id>, igual que la sincronización del agente');
 eq(karaoke_search($pdo, 'corazon partio')[0]['title'], 'Corazón; partío', 'el «;» dentro de comillas no rompe la fila');
 eq(array_column(karaoke_search($pdo, 'bohemian'), 'duration_s'), [354, 0], 'la versión local va antes que la de KaraFun en línea');
+eq(array_column(karaoke_search($pdo, 'bohemian'), 'source'), ['local', 'karafun'], 'la búsqueda dice el origen de cada canción');
 eq(array_column(karaoke_search($pdo, 'camisa'), 'title'), ['Camisa', 'La camisa negra'], 'título exacto primero');
 eq(array_column(karaoke_search($pdo, 'jua cami'), 'title'), ['La camisa negra'], 'prefijos de varias palabras (artista + título)');
 eq(karaoke_search($pdo, 'amisa'), [], 'busca por comienzo de palabra, no por pedazos sueltos');
