@@ -33,6 +33,22 @@ function table_exists(PDO $pdo, string $driver, string $table): bool
     return (int) $st->fetchColumn() > 0;
 }
 
+function karaoke_backfill_words(PDO $pdo): int
+{
+    $songs = $pdo->query('SELECT id, search_text FROM karaoke_songs')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $pairs = [];
+    foreach ($songs as $id => $text) {
+        foreach (array_slice(array_unique(array_map(static fn (string $w): string => substr($w, 0, 40), array_filter(explode(' ', (string) $text), 'strlen'))), 0, 40) as $w) {
+            $pairs[] = [(int) $id, $w];
+        }
+    }
+    foreach (array_chunk($pairs, 400) as $chunk) {
+        $pdo->prepare('INSERT INTO karaoke_song_words (song_id, word) VALUES ' . implode(', ', array_fill(0, count($chunk), '(?, ?)')))
+            ->execute(array_merge(...$chunk));
+    }
+    return count($songs);
+}
+
 function karaoke_table_name(string $createSql): string
 {
     preg_match('/CREATE TABLE IF NOT EXISTS (\w+)/', $createSql, $m);
@@ -70,6 +86,11 @@ function run_upgrades(PDO $pdo, string $driver): array
             if (!table_exists($pdo, $driver, $table)) {
                 $pdo->exec($sql);
                 $applied[] = "CREATE TABLE $table";
+                if ($table === 'karaoke_song_words') {
+                    // Canciones de una versión anterior sin índice de palabras: se indexan ya.
+                    $n = karaoke_backfill_words($pdo);
+                    $n && $applied[] = "karaoke_song_words: $n canciones indexadas";
+                }
             }
             continue;
         }

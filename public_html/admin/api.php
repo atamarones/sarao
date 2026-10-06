@@ -10,6 +10,7 @@ require __DIR__ . '/../app/bootstrap.php';
 require __DIR__ . '/../app/menu.php';
 require __DIR__ . '/../app/upgrade.php';
 require __DIR__ . '/../app/pos_sync.php';
+require __DIR__ . '/../app/karaoke.php';
 
 security_headers();
 header('Cache-Control: no-store');
@@ -224,6 +225,82 @@ function state(): array
     $s = public_settings(settings());
     $s['hours'] = hours_from_settings($s);
     return ['categories' => $cats, 'products' => $prods, 'promotions' => $promos, 'testimonials' => $tests, 'settings' => $s, 'pos' => pos_status()];
+}
+
+/** Estado del karaoke para el panel (se consulta cada pocos segundos en la pestaña Karaoke). */
+function karaoke_state(): array
+{
+    $pdo = db();
+    $night = karaoke_current_night($pdo);
+    $base = karaoke_public_base();
+    $tables = array_map(static fn (array $t): array => [
+        'id' => (int) $t['id'],
+        'number' => (int) $t['number'],
+        'name' => $t['name'],
+        'is_active' => (bool) $t['is_active'],
+        'url' => $base . '?m=' . $t['qr_token'],
+    ], $pdo->query('SELECT * FROM karaoke_tables ORDER BY number')->fetchAll());
+
+    $row = static fn (array $r): array => [
+        'id' => $r['id'],
+        'table' => $r['table_name'],
+        'singer' => $r['singer'],
+        'status' => $r['status'],
+        'title' => $r['title'] ?? $r['yt_title'] ?? ($r['youtube_id'] ? 'Video de YouTube ' . $r['youtube_id'] : 'Canción'),
+        'artist' => $r['artist'] ?? null,
+        'source' => $r['source'] ?? null,
+        'youtube_id' => $r['youtube_id'],
+        'error' => $r['error'],
+        'queue_pos' => $r['kf_queue_pos'] === null ? null : (int) $r['kf_queue_pos'],
+        'created_at' => karaoke_iso($r['created_at']),
+        'updated_at' => karaoke_iso($r['updated_at']),
+    ];
+    $select = 'SELECT r.*, t.name AS table_name, s.title, s.artist, s.source, d.title AS yt_title FROM karaoke_requests r
+        JOIN karaoke_tables t ON t.id = r.table_id LEFT JOIN karaoke_songs s ON s.id = r.song_id LEFT JOIN karaoke_downloads d ON d.youtube_id = r.youtube_id';
+    $inKf = $pdo->query("$select WHERE r.status IN ('enviado', 'en_cola', 'cantando') ORDER BY COALESCE(r.kf_queue_pos, 99), r.sent_at")->fetchAll();
+    $waiting = $night ? karaoke_waiting($pdo, (int) $night['id']) : [];
+    $failed = [];
+    if ($night) {
+        $st = $pdo->prepare("$select WHERE r.night_id = ? AND r.status IN ('fallido', 'retirado') ORDER BY r.updated_at DESC LIMIT 30");
+        $st->execute([$night['id']]);
+        $failed = $st->fetchAll();
+    }
+    $counts = $pdo->query('SELECT source, COUNT(*) AS n FROM karaoke_songs WHERE available = 1 GROUP BY source')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $sync = $pdo->query("SELECT summary, committed_at FROM karaoke_catalog_syncs WHERE status = 'committed' ORDER BY committed_at DESC LIMIT 1")->fetch() ?: null;
+    return [
+        'night' => $night ? ['id' => (int) $night['id'], 'code' => $night['night_code'], 'opens_at' => karaoke_iso($night['opens_at'])] : null,
+        'tables' => $tables,
+        'in_karafun' => array_map($row, $inKf),
+        'waiting' => array_map($row, $waiting),
+        'failed' => array_map($row, $failed),
+        'agent' => karaoke_agent_status($pdo),
+        'catalog' => [
+            'local' => (int) ($counts['local'] ?? 0),
+            'karafun' => (int) ($counts['karafun'] ?? 0),
+            'por_aprobar' => karaoke_count_por_aprobar($pdo),
+            'last_sync' => $sync ? json_decode((string) $sync['summary'], true) + ['at' => karaoke_iso($sync['committed_at'])] : null,
+            'karafun_import' => json_decode(karaoke_setting($pdo, 'karaoke_karafun_import'), true) ?: null,
+        ],
+        'token_set' => karaoke_setting($pdo, 'karaoke_agent_token') !== '',
+        'settings' => array_map(static fn (string $k): int => karaoke_setting_int($pdo, $k), array_combine(array_keys(KARAOKE_DEFAULTS), array_keys(KARAOKE_DEFAULTS))),
+        'server_time' => date('c', karaoke_clock()),
+    ];
+}
+
+/** URL pública de la página de mesa, a partir de la del panel (…/admin/api.php → …/karaoke/). */
+function karaoke_public_base(): string
+{
+    $root = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/admin/api.php'), 2)), '/');
+    return (is_https() ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $root . '/karaoke/';
+}
+
+function request_id_field(): string
+{
+    $id = (string) (input()['id'] ?? '');
+    if (!preg_match('/^[0-9a-f-]{36}$/', $id)) {
+        throw new ApiError('Pedido no válido.');
+    }
+    return $id;
 }
 
 // ---------------------------------------------------------------------------
@@ -573,9 +650,103 @@ try {
             audit($aid, 'update', 'password');
             respond(['ok' => true]);
 
+        // ----- Karaoke por mesa -----
+        case 'GET karaoke.state':
+            respond(karaoke_state());
+
+        case 'POST karaoke.table.save':
+            $id = int_field('id');
+            $number = (int) int_field('number');
+            $tid = karaoke_table_save($pdo, $id ?: null, $number, (string) str_field('name', 40, false, 'El nombre'));
+            audit($aid, $id ? 'update' : 'create', 'karaoke_table', $tid);
+            respond(['ok' => true, 'id' => $tid, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.table.toggle':
+            $id = (int) int_field('id');
+            if (!karaoke_table($pdo, $id)) {
+                throw new ApiError('La mesa ya no existe.', 404);
+            }
+            $pdo->prepare('UPDATE karaoke_tables SET is_active = ?, updated_at = ? WHERE id = ?')->execute([bool_field('value'), now(), $id]);
+            audit($aid, 'update', 'karaoke_table', $id);
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.night.open':
+            $night = karaoke_night_open($pdo, $aid);
+            audit($aid, 'create', 'karaoke_night', (int) $night['id']);
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.night.rotate':
+            $night = karaoke_night_rotate_code($pdo);
+            audit($aid, 'update', 'karaoke_night', (int) $night['id']);
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.night.close':
+            $n = karaoke_night_close($pdo, 'El encargado cerró la noche de karaoke.');
+            audit($aid, 'close', 'karaoke_night');
+            respond(['ok' => true, 'cancelled' => $n, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.request.cancel':
+            karaoke_request_cancel($pdo, request_id_field(), 'admin');
+            audit($aid, 'cancel', 'karaoke_request');
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.request.move':
+            karaoke_request_move($pdo, request_id_field(), (int) (input()['dir'] ?? 0) < 0 ? -1 : 1);
+            audit($aid, 'reorder', 'karaoke_request');
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.request.remove':
+            karaoke_request_remove($pdo, request_id_field());
+            audit($aid, 'remove', 'karaoke_request');
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.catalog.resync':
+            karaoke_command_create($pdo, 'catalog.resync', []);
+            audit($aid, 'resync', 'karaoke_catalog');
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.karafun.import':
+            $file = $_FILES['csv'] ?? null;
+            if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                throw new ApiError(($file['error'] ?? 0) === UPLOAD_ERR_INI_SIZE ? 'El archivo supera el tamaño que permite el servidor.' : 'Elige el archivo CSV del catálogo de KaraFun.');
+            }
+            if ($file['size'] > 40 * 1024 * 1024) {
+                throw new ApiError('El archivo pesa demasiado (máximo 40 MB).');
+            }
+            @set_time_limit(300);
+            $summary = karaoke_import_karafun_csv($pdo, $file['tmp_name']);
+            audit($aid, 'import', 'karaoke_catalog');
+            respond(['ok' => true, 'summary' => $summary, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.settings.save':
+            foreach (['karaoke_max_pending' => [1, 10], 'karaoke_rate_table' => [1, 30], 'karaoke_rate_ip' => [1, 60]] as $k => [$min, $max]) {
+                $v = int_field($k);
+                if ($v === null) {
+                    continue;
+                }
+                if ($v < $min || $v > $max) {
+                    throw new ApiError("Un límite está fuera de rango ($min a $max).", 422, [$k => "De $min a $max."]);
+                }
+                save_setting($k, (string) $v);
+            }
+            audit($aid, 'update', 'karaoke_settings');
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.token.rotate':
+            // Se muestra una sola vez para copiarlo en el agente; nunca vuelve a salir del servidor.
+            $token = bin2hex(random_bytes(32));
+            save_setting('karaoke_agent_token', $token);
+            audit($aid, 'rotate', 'karaoke_agent_token');
+            respond(['ok' => true, 'token' => $token, 'karaoke' => karaoke_state()]);
+
         default:
             problem(404, 'No encontrado', 'Acción desconocida.');
     }
+} catch (KaraokeError $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    problem($e->status, $e->title, $e->getMessage());
 } catch (ApiError $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();

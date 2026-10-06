@@ -137,9 +137,10 @@
   }
 
   // ---------- router ----------
-  const views = { productos: renderProducts, categorias: renderCategories, promos: renderPromos, testimonios: renderTestimonials, ajustes: renderSettings };
+  const views = { productos: renderProducts, categorias: renderCategories, promos: renderPromos, testimonios: renderTestimonials, karaoke: renderKaraoke, ajustes: renderSettings };
   function route() {
     const name = (location.hash || '#productos').slice(1);
+    if (name !== 'karaoke') stopKaraokePolling();
     const fn = views[name] || renderProducts;
     $$('.tabs a').forEach((a) => a.setAttribute('aria-current', a.dataset.view === name ? 'page' : 'false'));
     fn();
@@ -218,6 +219,7 @@
       else if (page === 'categorias') await categoryAction(btn.dataset.act, id);
       else if (page === 'promos') await promoAction(btn.dataset.act, id);
       else if (page === 'testimonios') await testimonialAction(btn.dataset.act, id);
+      else if (page === 'karaoke') await karaokeAction(btn);
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -228,6 +230,17 @@
     if (!cb) return;
     const id = Number(cb.closest('[data-id]').dataset.id);
     const page = (location.hash || '#productos').slice(1);
+    if (page === 'karaoke') {
+      try {
+        kstate = (await api('karaoke.table.toggle', { id, value: cb.checked })).karaoke;
+        toast(cb.checked ? 'Mesa activa' : 'Mesa desactivada');
+        renderKaraokeLive();
+      } catch (err) {
+        cb.checked = !cb.checked;
+        toast(err.message, 'error');
+      }
+      return;
+    }
     try {
       if (page === 'productos') await api('product.toggle', { id, field: 'is_active', value: cb.checked });
       else if (page === 'categorias') {
@@ -773,6 +786,284 @@
         toast('Contraseña actualizada');
       } catch (err) { showErrors(pf, err); }
     });
+  }
+
+  // ---------- karaoke por mesa ----------
+  // La vista se pinta una vez (formularios) y las zonas en vivo se refrescan cada 5 s.
+  // El estado del agente falla cerrado: si no se pudo leer, se dice, nunca se muestra «conectado».
+  let kstate = null;
+  let kTimer = null;
+  let kError = null;
+  const K_STATUS = {
+    descargando: 'Descargando', descargado: 'Descargado', en_espera: 'En espera', enviado: 'Enviando a KaraFun',
+    en_cola: 'En la cola de KaraFun', cantando: 'Sonando', cantada: 'Cantada', fallido: 'Fallido', retirado: 'Retirado', cancelado: 'Cancelado',
+  };
+  const kTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }) : '');
+  const agoText = (s) => (s == null ? 'nunca' : s < 60 ? `hace ${s} s` : s < 3600 ? `hace ${Math.round(s / 60)} min` : `hace ${Math.round(s / 3600)} h`);
+
+  function stopKaraokePolling() {
+    if (kTimer) clearInterval(kTimer);
+    kTimer = null;
+  }
+
+  async function loadKaraoke() {
+    try {
+      const res = await fetch('api.php?action=karaoke.state', { credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' });
+      if (res.status === 401) { location.reload(); return; }
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data || !data.agent) throw new Error((data && data.detail) || 'Respuesta no válida');
+      kstate = data;
+      kError = null;
+    } catch (err) {
+      kError = { message: err.message || 'Sin conexión', at: new Date() };
+    }
+    renderKaraokeLive();
+  }
+
+  function renderKaraoke() {
+    view.innerHTML = `
+      <div class="view-head"><div><h1>Karaoke</h1><p class="muted">Pedidos desde el celular de cada mesa. Se actualiza solo cada 5 segundos.</p></div></div>
+      <div class="k-alert alert alert-error" id="k-error" role="alert" hidden></div>
+      <div class="k-grid" id="k-status"><p class="loading">Cargando el karaoke…</p></div>
+      <section class="group"><h2 class="group-title">Ahora en KaraFun <span class="count" id="k-live-n">0</span></h2>
+        <p class="hint">La que suena y las siguientes 2. Lo demás espera aquí y entra solo cuando hay espacio.</p>
+        <ul class="rows" id="k-live"></ul></section>
+      <section class="group"><h2 class="group-title">En espera <span class="count" id="k-wait-n">0</span></h2>
+        <p class="hint">En orden de turno, rotando entre mesas. Usa las flechas para adelantar o atrasar un pedido.</p>
+        <ul class="rows" id="k-wait"></ul></section>
+      <section class="group"><h2 class="group-title">Fallidos o retirados esta noche <span class="count" id="k-failed-n">0</span></h2>
+        <ul class="rows" id="k-failed"></ul></section>
+      <section class="group"><h2 class="group-title">Mesas</h2>
+        <form class="card k-add" id="k-add" novalidate>
+          <p class="alert alert-error form-error" tabindex="-1" hidden></p>
+          <div class="k-add-row">
+            <label>Número<input name="number" type="number" inputmode="numeric" min="1" max="999" required></label>
+            <label>Nombre <span class="opt">opcional</span><input name="name" maxlength="40" placeholder="Mesa 7, Barra, Terraza…"></label>
+            <button class="btn btn-primary" type="submit">${icon('plus')} Crear mesa</button>
+          </div>
+        </form>
+        <p class="hint"><a class="link" href="karaoke-qr.php" target="_blank" rel="noopener">Imprimir los QR de todas las mesas activas</a></p>
+        <ul class="rows" id="k-tables"></ul></section>
+      <section class="group"><h2 class="group-title">Ajustes del karaoke</h2>
+        <form class="card stack" id="k-settings" novalidate>
+          <p class="alert alert-error form-error" tabindex="-1" hidden></p>
+          <div class="k-three">
+            <label>Pendientes por mesa<input name="karaoke_max_pending" type="number" min="1" max="10" inputmode="numeric"><span class="hint">Canciones esperando a la vez.</span></label>
+            <label>Pedidos por minuto por mesa<input name="karaoke_rate_table" type="number" min="1" max="30" inputmode="numeric"></label>
+            <label>Pedidos por minuto por celular<input name="karaoke_rate_ip" type="number" min="1" max="60" inputmode="numeric"></label>
+          </div>
+          <div><button class="btn btn-ghost" type="submit">Guardar límites</button></div>
+        </form>
+        <div class="card stack k-token">
+          <h3 class="card-title">Token del agente</h3>
+          <p class="hint" id="k-token-state"></p>
+          <div class="k-token-out" id="k-token-out" hidden>
+            <p>Cópialo ahora en la configuración del agente del PC del bar. <strong>No se vuelve a mostrar.</strong></p>
+            <code id="k-token-value"></code>
+            <button class="btn btn-ghost btn-sm" type="button" id="k-token-copy">Copiar</button>
+          </div>
+          <div><button class="btn btn-ghost" type="button" data-act="token">Generar token nuevo</button></div>
+        </div>
+      </section>`;
+
+    $('#k-add').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      try {
+        const r = await withBusy($('[type="submit"]', f), () => api('karaoke.table.save', { number: f.elements.number.value, name: f.elements.name.value }));
+        kstate = r.karaoke;
+        f.reset();
+        $('.form-error', f).hidden = true;
+        toast('Mesa creada. Imprime su QR.');
+        renderKaraokeLive();
+      } catch (err) { showErrors(f, err); }
+    });
+    $('#k-settings').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const body = {};
+      ['karaoke_max_pending', 'karaoke_rate_table', 'karaoke_rate_ip'].forEach((k) => { body[k] = f.elements[k].value; });
+      try {
+        kstate = (await withBusy($('[type="submit"]', f), () => api('karaoke.settings.save', body))).karaoke;
+        $('.form-error', f).hidden = true;
+        toast('Límites guardados');
+      } catch (err) { showErrors(f, err); }
+    });
+    $('#k-token-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText($('#k-token-value').textContent); toast('Token copiado'); } catch { toast('Selecciónalo y cópialo a mano', 'error'); }
+    });
+
+    kstate = null;
+    loadKaraoke().then(() => {
+      if (kstate) {
+        const f = $('#k-settings');
+        Object.entries(kstate.settings).forEach(([k, v]) => { if (f.elements[k]) f.elements[k].value = v; });
+      }
+    });
+    stopKaraokePolling();
+    kTimer = setInterval(() => { if (!document.hidden) loadKaraoke(); }, 5000);
+  }
+
+  function kRow(r, actions) {
+    const meta = [r.table, `canta ${r.singer}`, K_STATUS[r.status] || r.status, r.queue_pos != null ? `posición ${r.queue_pos}` : '', r.youtube_id ? 'YouTube' : r.source === 'karafun' ? 'KaraFun en línea' : ''].filter(Boolean);
+    return `<li class="row k-row k-${esc(r.status)}" data-rid="${esc(r.id)}">
+      <div class="row-main">
+        <p class="row-title k-title">${esc(r.title)}${r.artist ? ` <span class="muted">· ${esc(r.artist)}</span>` : ''}</p>
+        <p class="row-sub">${meta.map(esc).join(' · ')}</p>
+        ${r.error ? `<p class="k-err">${esc(r.error)}</p>` : ''}
+      </div>
+      ${actions ? `<div class="row-actions">${actions}</div>` : ''}
+    </li>`;
+  }
+
+  function renderKaraokeLive() {
+    if ((location.hash || '').slice(1) !== 'karaoke' || !$('#k-status')) return;
+    const errBox = $('#k-error');
+    errBox.hidden = !kError;
+    if (kError) errBox.textContent = `No se pudo leer el estado del karaoke (${kError.message}). Lo que ves abajo puede estar desactualizado; se reintenta solo.`;
+    const k = kstate;
+    if (!k) {
+      $('#k-status').innerHTML = kError ? '<div class="card"><p class="k-badge k-unknown">Estado desconocido</p></div>' : '<p class="loading">Cargando el karaoke…</p>';
+      return;
+    }
+    const a = k.agent;
+    const stale = !!kError;
+    // Tres estados explícitos: desconocido (no pude leer), problema, ok.
+    const agentBadge = stale ? ['k-unknown', 'Desconocido'] : !a.online ? ['k-bad', 'Agente desconectado'] : !a.karafun_connected ? ['k-bad', 'KaraFun no responde'] : ['k-ok', 'Conectado'];
+    const night = k.night;
+    const cat = k.catalog;
+    $('#k-status').innerHTML = `
+      <section class="card stack k-card">
+        <h2 class="card-title">Noche</h2>
+        ${night ? `<p class="k-code" aria-label="Código de la noche">${esc(night.code)}</p>
+          <p class="hint">Código de la noche. Muéstralo en la pantalla del karaoke. Abierta desde las ${esc(kTime(night.opens_at))}; se cierra sola a las 14 h.</p>
+          <div class="k-actions"><button class="btn btn-ghost btn-sm" data-act="night-rotate">Cambiar código</button><button class="btn btn-ghost btn-sm" data-act="night-close">Cerrar noche</button></div>`
+        : `<p class="muted">El karaoke por mesa está cerrado: las mesas no pueden pedir.</p>
+          <div><button class="btn btn-primary" data-act="night-open">Abrir noche</button></div>`}
+      </section>
+      <section class="card stack k-card">
+        <h2 class="card-title">Agente del bar</h2>
+        <p class="k-badge ${agentBadge[0]}">${esc(agentBadge[1])}</p>
+        <p class="hint">${stale ? 'Sin datos frescos del servidor.' : `Último latido ${esc(agoText(a.seconds_ago))}${a.version ? ` · versión ${esc(a.version)}` : ''}`}</p>
+        <p class="hint">KaraFun: ${a.karafun_connected ? `conectado${a.karafun_state ? ` (${esc(a.karafun_state)})` : ''}` : a.karafun_running ? 'abierto, sin conexión' : 'sin datos'} · ${a.queue.length} en su cola${a.acks_pending ? ` · ${a.acks_pending} confirmaciones pendientes` : ''}</p>
+      </section>
+      <section class="card stack k-card">
+        <h2 class="card-title">Catálogo</h2>
+        <p class="k-num"><strong>${cat.por_aprobar}</strong> en «Por aprobar»</p>
+        <p class="hint">${cat.local.toLocaleString('es-CO')} canciones locales${cat.last_sync ? ` · última sincronización ${esc(kTime(cat.last_sync.at))}` : ' · sin sincronizar'}<br>${cat.karafun.toLocaleString('es-CO')} de KaraFun en línea${cat.karafun_import ? ` · importadas ${esc(new Date(cat.karafun_import.imported_at).toLocaleDateString('es-CO'))}` : ''}</p>
+        <div class="k-actions">
+          <button class="btn btn-ghost btn-sm" data-act="resync">Pedir catálogo al agente</button>
+          <label class="btn btn-ghost btn-sm k-file">Importar CSV de KaraFun<input type="file" accept=".csv,text/csv" id="k-csv"></label>
+        </div>
+      </section>`;
+    const csv = $('#k-csv');
+    csv.addEventListener('change', () => importKarafun(csv));
+
+    $('#k-live-n').textContent = k.in_karafun.length;
+    $('#k-live').innerHTML = k.in_karafun.length ? k.in_karafun.map((r) => kRow(r, ['enviado', 'en_cola'].includes(r.status)
+      ? `<button class="btn btn-ghost btn-sm" data-act="remove">Quitar de KaraFun</button>` : '')).join('')
+      : '<li class="empty-row">Nada en KaraFun desde el sistema.</li>';
+    $('#k-wait-n').textContent = k.waiting.length;
+    $('#k-wait').innerHTML = k.waiting.length ? k.waiting.map((r, i) => kRow(r, `
+      <button class="icon-btn" data-act="up" ${i === 0 ? 'disabled' : ''} title="Adelantar">${icon('up')}<span class="sr-only">Adelantar</span></button>
+      <button class="icon-btn" data-act="down" ${i === k.waiting.length - 1 ? 'disabled' : ''} title="Atrasar">${icon('down')}<span class="sr-only">Atrasar</span></button>
+      <button class="btn btn-ghost btn-sm" data-act="cancel">Cancelar</button>`)).join('')
+      : `<li class="empty-row">${night ? 'No hay pedidos esperando.' : 'Abre la noche para recibir pedidos.'}</li>`;
+    $('#k-failed-n').textContent = k.failed.length;
+    $('#k-failed').innerHTML = k.failed.length ? k.failed.map((r) => kRow(r, '')).join('') : '<li class="empty-row">Ninguno.</li>';
+    $('#k-tables').innerHTML = k.tables.length ? k.tables.map((t) => `
+      <li class="row ${t.is_active ? '' : 'is-off'}" data-id="${t.id}">
+        <div class="row-main"><p class="row-title">${esc(t.name)}</p><p class="row-sub">Mesa ${t.number}</p></div>
+        <div class="row-actions">
+          <label class="switch"><input type="checkbox" data-act="active" ${t.is_active ? 'checked' : ''}><span class="switch-ui" aria-hidden="true"></span><span class="switch-label">${t.is_active ? 'Activa' : 'Inactiva'}</span></label>
+          <a class="btn btn-ghost btn-sm" href="karaoke-qr.php?id=${t.id}" target="_blank" rel="noopener">Ver e imprimir QR</a>
+          <button class="icon-btn" data-act="edit-table" title="Renombrar">${icon('edit')}<span class="sr-only">Renombrar</span></button>
+        </div>
+      </li>`).join('') : '<li class="empty-row">Crea las mesas para imprimir sus QR.</li>';
+    $('#k-token-state').textContent = k.token_set ? 'Hay un token guardado. Generar uno nuevo desconecta al agente hasta que lo actualices allá.' : 'Aún no hay token: el agente no puede conectarse.';
+  }
+
+  async function importKarafun(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('csv', file);
+    const label = input.closest('label');
+    label.classList.add('is-busy');
+    toast('Importando el catálogo de KaraFun… puede tardar un minuto.');
+    try {
+      const r = await api('karaoke.karafun.import', fd, { form: true });
+      kstate = r.karaoke;
+      const s = r.summary;
+      toast(`KaraFun: ${s.songs.toLocaleString('es-CO')} canciones (${s.added} nuevas, ${s.updated} cambiadas, ${s.unavailable} ya no están${s.skipped ? `, ${s.skipped} filas no válidas` : ''})`);
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      label.classList.remove('is-busy');
+      renderKaraokeLive();
+    }
+  }
+
+  async function karaokeAction(btn) {
+    const act = btn.dataset.act;
+    const rid = btn.closest('[data-rid]')?.dataset.rid;
+    const tid = Number(btn.closest('[data-id]')?.dataset.id);
+    const run = async (action, body = {}, msg = '') => {
+      kstate = (await api(action, body)).karaoke;
+      if (msg) toast(msg);
+      renderKaraokeLive();
+    };
+    if (act === 'night-open') return run('karaoke.night.open', {}, 'Noche abierta. Muestra el código en la pantalla.');
+    if (act === 'night-rotate') {
+      if (!(await confirmDialog('¿Cambiar el código?', 'Los celulares que ya entraron tendrán que escribir el nuevo.', 'Cambiar código'))) return;
+      return run('karaoke.night.rotate', {}, 'Código cambiado');
+    }
+    if (act === 'night-close') {
+      if (!(await confirmDialog('¿Cerrar la noche?', 'Las mesas ya no podrán pedir y se cancelan los pedidos que esperan (lo que ya está en KaraFun sigue sonando).', 'Cerrar noche'))) return;
+      return run('karaoke.night.close', {}, 'Noche cerrada');
+    }
+    if (act === 'resync') return run('karaoke.catalog.resync', {}, 'Pedido enviado: el agente subirá el catálogo (unos 4 minutos).');
+    if (act === 'up' || act === 'down') return run('karaoke.request.move', { id: rid, dir: act === 'up' ? -1 : 1 });
+    if (act === 'cancel') {
+      if (!(await confirmDialog('¿Cancelar el pedido?', 'La mesa verá que el pedido se canceló.', 'Cancelar pedido'))) return;
+      return run('karaoke.request.cancel', { id: rid }, 'Pedido cancelado');
+    }
+    if (act === 'remove') {
+      if (!(await confirmDialog('¿Quitar de KaraFun?', 'El agente la quitará de la cola si aún no ha sonado.', 'Quitar'))) return;
+      return run('karaoke.request.remove', { id: rid }, 'Orden enviada al agente');
+    }
+    if (act === 'edit-table') {
+      const t = kstate.tables.find((x) => x.id === tid);
+      const d = openModal(`<form class="modal-body stack" novalidate>
+        <header class="modal-head"><h2 class="modal-title">Editar mesa</h2>
+          <button type="button" class="icon-btn" data-close title="Cerrar">${icon('x')}<span class="sr-only">Cerrar</span></button></header>
+        <p class="alert alert-error form-error" tabindex="-1" hidden></p>
+        <div class="two"><label>Número<input name="number" type="number" min="1" max="999" required value="${t.number}"></label>
+        <label>Nombre<input name="name" maxlength="40" value="${esc(t.name)}"></label></div>
+        <p class="hint">El QR no cambia: no hace falta reimprimirlo.</p>
+        <footer class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Guardar</button></footer>
+      </form>`);
+      const form = $('form', d);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          kstate = (await withBusy($('[type="submit"]', form), () => api('karaoke.table.save', { id: t.id, number: form.elements.number.value, name: form.elements.name.value }))).karaoke;
+          d.dataset.dirty = '0';
+          d.close();
+          toast('Mesa guardada');
+          renderKaraokeLive();
+        } catch (err) { showErrors(form, err); }
+      });
+      return;
+    }
+    if (act === 'token') {
+      if (kstate.token_set && !(await confirmDialog('¿Generar un token nuevo?', 'El agente del bar dejará de conectarse hasta que pegues el token nuevo en su configuración.', 'Generar'))) return;
+      const r = await api('karaoke.token.rotate', {});
+      kstate = r.karaoke;
+      $('#k-token-value').textContent = r.token;
+      $('#k-token-out').hidden = false;
+      renderKaraokeLive();
+    }
   }
 
   // ---------- inicio ----------

@@ -251,3 +251,34 @@ legend { padding: 0 6px; font-size: 13px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- Karaoke por mesa ---------- */
+.k-grid { display: grid; gap: 12px; margin-top: 8px; }
+.k-card { align-content: start; }
+.k-code { font: 900 64px/1 var(--display); letter-spacing: .18em; color: var(--crown); font-variant-numeric: tabular-nums; }
+.k-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.k-badge { justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 14px; }
+.k-badge::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.k-ok { background: rgba(61, 220, 132, .14); color: var(--ok); }
+.k-bad { background: rgba(255, 90, 78, .14); color: var(--danger); }
+.k-unknown { background: var(--night-3); color: var(--muted); }
+.k-num { font-size: 15px; }
+.k-num strong { font: 800 34px/1 var(--display); color: var(--crown); margin-right: 4px; }
+.k-file { position: relative; overflow: hidden; cursor: pointer; }
+.k-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.k-file:focus-within { outline: 2px solid var(--crown); outline-offset: 2px; }
+.k-file.is-busy { opacity: .6; pointer-events: none; }
+.k-row { grid-template-columns: minmax(0, 1fr); }
+.k-title { font-weight: 600; overflow-wrap: anywhere; }
+.k-cantando { border-color: rgba(248, 184, 0, .5); }
+.k-err { color: var(--danger); font-size: 13px; margin-top: 2px; }
+.k-add-row { display: grid; gap: 12px; align-items: end; }
+.k-three { display: grid; gap: 14px; }
+.k-token-out { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: rgba(248, 184, 0, .08); border: 1px solid rgba(248, 184, 0, .35); }
+.k-token-out code { font: 500 13px/1.4 ui-monospace, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+.k-token-out .btn { justify-self: start; }
+@media (min-width: 720px) {
+  .k-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .k-add-row { grid-template-columns: 140px minmax(0, 1fr) auto; }
+  .k-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
