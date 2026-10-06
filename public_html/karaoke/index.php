@@ -75,10 +75,10 @@ $v = static fn (string $f): int => (int) @filemtime(__DIR__ . '/../assets/' . $f
 
   <div id="kk-app" hidden>
     <nav class="setlist kk-nav" aria-label="Secciones">
-      <ul class="setlist-chips kk-tabs">
-        <li><a href="#buscar" data-tab="buscar">Buscar canción</a></li>
-        <li><a href="#enlace" data-tab="enlace">Enlace de YouTube</a></li>
-        <li><a href="#pedidos" data-tab="pedidos">Mis pedidos <span class="kk-count" id="kk-count" hidden></span></a></li>
+      <ul class="kk-tabs">
+        <li><a href="#buscar" data-tab="buscar">Buscar</a></li>
+        <li><a href="#enlace" data-tab="enlace">YouTube</a></li>
+        <li><a href="#pedidos" data-tab="pedidos">Mis pedidos<span class="kk-count" id="kk-count" hidden></span></a></li>
       </ul>
     </nav>
 

@@ -78,9 +78,11 @@
   // Errores que sacan de la sesión: código viejo, noche cerrada, mesa desactivada.
   function handleSessionError(err) {
     if (err.code === 'bad_code') {
+      // Si este celular ya había entrado con ese código, es que el encargado lo cambió.
+      const hadCode = store.get(KEY_CODE) === code && code !== '';
       store.del(KEY_CODE);
       code = '';
-      showGate('El código cambió. Escribe el de la pantalla del karaoke.');
+      showGate(hadCode ? 'El código cambió. Escribe el de la pantalla del karaoke.' : err.message);
       return true;
     }
     if (['no_night', 'table_inactive', 'bad_table'].includes(err.code)) {
@@ -154,6 +156,7 @@
     $$('.kk-tabs a').forEach((a) => a.setAttribute('aria-current', String(a.dataset.tab === name)));
     $$('.kk-panel').forEach((p) => { p.hidden = p.id !== 'tab-' + name; });
     if (name === 'pedidos') refreshOrders();
+    if (name === 'enlace' && !linkForm.elements.singer.value) linkForm.elements.singer.value = store.get(KEY_SINGER);
   }
   window.addEventListener('hashchange', route);
 
@@ -307,7 +310,9 @@
       ul.replaceChildren(li);
       return;
     }
-    ul.replaceChildren(...list.map((r) => {
+    // Lo que sigue vivo primero; lo terminado (cantada, cancelada, fallida) al final.
+    const sorted = [...active, ...list.filter((r) => !active.includes(r))];
+    ul.replaceChildren(...sorted.map((r) => {
       const [label, tone] = STATUS[r.status] || [r.status, 'wait'];
       const li = el('li', `kk-order is-${tone}`);
       const head = el('div', 'kk-order-head');
@@ -317,7 +322,7 @@
       li.append(head);
       const t = el('p', 'kk-order-title' + (r.status === 'cantando' ? ' kara is-singing' : ''), r.title);
       li.append(t);
-      li.append(el('p', 'kk-order-meta', [r.artist, `Canta: ${r.singer}`, r.from_youtube ? 'YouTube' : ''].filter(Boolean).join(' · ')));
+      li.append(el('p', 'kk-order-meta', [r.artist, `Canta: ${r.singer}`, r.from_youtube && r.artist !== 'YouTube' ? 'YouTube' : ''].filter(Boolean).join(' · ')));
       if (r.error && ['fallido', 'retirado'].includes(r.status)) li.append(el('p', 'kk-order-error', r.error));
       if (r.cancellable) {
         const b = el('button', 'kk-btn kk-btn-ghost kk-btn-small', 'Cancelar');
