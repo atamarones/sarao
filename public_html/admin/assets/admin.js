@@ -950,11 +950,11 @@
       <section class="card stack k-card">
         <h2 class="card-title">Catálogo</h2>
         <p class="k-num"><strong>${cat.por_aprobar}</strong> en «Por aprobar»</p>
-        <p class="hint">${cat.local.toLocaleString('es-CO')} canciones locales${cat.last_sync ? ` · sincronizadas ${esc(kTime(cat.last_sync.at))}` : ' · sin sincronizar'}<br>${cat.karafun.toLocaleString('es-CO')} de KaraFun en línea${cat.last_sync_karafun ? ` · sincronizadas ${esc(new Date(cat.last_sync_karafun.at).toLocaleDateString('es-CO'))}` : cat.karafun_import ? ` · importadas ${esc(new Date(cat.karafun_import.imported_at).toLocaleDateString('es-CO'))}` : ''}</p>
+        <p class="hint">${cat.local.toLocaleString('es-CO')} canciones locales${cat.last_sync ? ` · sincronizadas ${esc(kTime(cat.last_sync.at))}` : cat.local_import ? ` · importadas ${esc(new Date(cat.local_import.imported_at).toLocaleDateString('es-CO'))}` : ' · sin sincronizar'}<br>${cat.karafun.toLocaleString('es-CO')} de KaraFun en línea${cat.last_sync_karafun ? ` · sincronizadas ${esc(new Date(cat.last_sync_karafun.at).toLocaleDateString('es-CO'))}` : cat.karafun_import ? ` · importadas ${esc(new Date(cat.karafun_import.imported_at).toLocaleDateString('es-CO'))}` : ''}</p>
         <div class="k-actions">
           <button class="btn btn-ghost btn-sm" data-act="resync" data-source="local">Releer carpeta local</button>
           <button class="btn btn-ghost btn-sm" data-act="resync" data-source="karafun">Releer KaraFun en línea</button>
-          <label class="btn btn-ghost btn-sm k-file">Importar CSV de KaraFun<input type="file" accept=".csv,text/csv" id="k-csv"></label>
+          <label class="btn btn-ghost btn-sm k-file">Importar CSV de catálogo<input type="file" accept=".csv,text/csv" id="k-csv"></label>
         </div>
       </section>`;
     const csv = $('#k-csv');
@@ -991,12 +991,13 @@
     fd.append('csv', file);
     const label = input.closest('label');
     label.classList.add('is-busy');
-    toast('Importando el catálogo de KaraFun… puede tardar un minuto.');
+    toast('Importando el catálogo… puede tardar un minuto.');
     try {
-      const r = await api('karaoke.karafun.import', fd, { form: true });
+      const r = await api('karaoke.catalog.import', fd, { form: true });
       kstate = r.karaoke;
       const s = r.summary;
-      toast(`KaraFun: ${s.songs.toLocaleString('es-CO')} canciones (${s.added} nuevas, ${s.updated} cambiadas, ${s.unavailable} ya no están${s.skipped ? `, ${s.skipped} filas no válidas` : ''})`);
+      const label = s.source === 'local' ? 'Carpeta local' : 'KaraFun';
+      toast(`${label}: ${s.songs.toLocaleString('es-CO')} canciones (${s.added} nuevas, ${s.updated} cambiadas, ${s.unavailable} ya no están${s.hidden ? `, ${s.hidden} repetidas u ocultas` : ''}${s.skipped ? `, ${s.skipped} filas no válidas` : ''})`);
     } catch (err) {
       toast(err.message, 'error');
     } finally {

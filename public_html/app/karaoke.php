@@ -154,6 +154,38 @@ function karaoke_is_por_aprobar(?string $folder): bool
     return $folder !== null && karaoke_normalize($folder) === 'por aprobar';
 }
 
+/**
+ * Qué copia de una canción repetida se ofrece: primero la de su carpeta de letra, luego
+ * «Por aprobar», luego «Repetidos». «Corregir» guarda archivos dañados (arquitectura §14):
+ * esas canciones no se ofrecen a las mesas (null).
+ */
+function karaoke_folder_rank(?string $folder): ?int
+{
+    return match ($folder === null ? '' : karaoke_normalize($folder)) {
+        'corregir' => null,
+        'por aprobar' => 1,
+        'repetidos' => 2,
+        default => 0,
+    };
+}
+
+/** Deja una fila por natural_key con la mejor copia y quita las de «Corregir». */
+function karaoke_pick_copies(iterable $rows): array
+{
+    $byKey = [];
+    foreach ($rows as $r) {
+        $rank = karaoke_folder_rank($r['folder'] ?? null);
+        if ($rank === null) {
+            continue;
+        }
+        $prev = $byKey[$r['natural_key']] ?? null;
+        if ($prev === null || $rank < karaoke_folder_rank($prev['folder'] ?? null)) {
+            $byKey[$r['natural_key']] = $r;
+        }
+    }
+    return $byKey;
+}
+
 // ---------------------------------------------------------------------------
 // YouTube (arquitectura §10): solo un enlace de video; se guarda solo el id.
 
@@ -690,6 +722,97 @@ function karaoke_song_upsert(PDO $pdo, array $song, ?string $seenAt = null): int
 }
 
 /**
+ * Importa un CSV de catálogo y decide por las columnas: con NaturalKey es el catálogo local que
+ * exporta el agente (Folder, File, Duration, YoutubeId); sin ella, el catálogo en línea de KaraFun.
+ */
+function karaoke_import_catalog_csv(PDO $pdo, string $path): array
+{
+    $f = @fopen($path, 'rb');
+    if (!$f) {
+        throw new KaraokeError('No se pudo leer el archivo.', 422, 'csv_unreadable');
+    }
+    $header = fgetcsv($f, 0, ';', '"', '');
+    fclose($f);
+    $names = array_map(static fn ($h): string => strtolower(trim((string) preg_replace('/^\xEF\xBB\xBF/', '', (string) $h))), is_array($header) ? $header : []);
+    return in_array('naturalkey', $names, true)
+        ? karaoke_import_local_csv($pdo, $path)
+        : ['source' => 'karafun'] + karaoke_import_karafun_csv($pdo, $path);
+}
+
+/**
+ * Catálogo local desde el CSV del agente (Id;Title;Artist;…;Duration;Folder;File;NaturalKey;YoutubeId).
+ * Equivale a una sincronización local completa (contrato §2): misma validación de canciones y mismas
+ * reglas de carpeta; las locales que no vienen pasan a available = 0. Todo en una transacción.
+ */
+function karaoke_import_local_csv(PDO $pdo, string $path): array
+{
+    $f = @fopen($path, 'rb');
+    if (!$f) {
+        throw new KaraokeError('No se pudo leer el archivo.', 422, 'csv_unreadable');
+    }
+    $header = fgetcsv($f, 0, ';', '"', '');
+    $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) ($header[0] ?? ''));
+    $cols = array_change_key_case(array_flip(array_map(static fn ($h): string => trim((string) $h), $header)));
+    foreach (['title', 'artist', 'naturalkey'] as $c) {
+        if (!isset($cols[$c])) {
+            throw new KaraokeError('El archivo no parece el catálogo local: falta la columna ' . $c . '.', 422, 'csv_columns');
+        }
+    }
+    $col = static fn (array $r, string $c): string => isset($cols[$c]) ? trim((string) ($r[$cols[$c]] ?? '')) : '';
+    $rows = [];
+    $skipped = 0;
+    $mismatch = [];
+    while (($r = fgetcsv($f, 0, ';', '"', '')) !== false) {
+        if ($r === [null]) {
+            continue;
+        }
+        $dur = $col($r, 'duration');
+        $yt = $col($r, 'youtubeid');
+        try {
+            $s = karaoke_clean_song([
+                'natural_key' => $col($r, 'naturalkey'),
+                'source' => 'local',
+                'kf_id' => null,
+                'title' => $col($r, 'title'),
+                'artist' => $col($r, 'artist'),
+                'duration_s' => ctype_digit($dur) ? (int) $dur : 0,
+                'folder' => $col($r, 'folder') ?: null,
+                'file' => $col($r, 'file') ?: null,
+                'youtube_id' => $yt === '' ? null : $yt,
+            ]);
+        } catch (KaraokeError) {
+            $skipped++;
+            continue;
+        }
+        if (!$s['key_matches'] && count($mismatch) < 5) {
+            $mismatch[] = $s['natural_key'];
+        }
+        $rows[] = $s;
+    }
+    fclose($f);
+    if (!$rows) {
+        throw new KaraokeError('El archivo no tiene canciones válidas.', 422, 'csv_empty');
+    }
+    @set_time_limit(300);
+    return karaoke_tx($pdo, static function () use ($pdo, $rows, $skipped, $mismatch): array {
+        $now = karaoke_now();
+        $byKey = karaoke_pick_copies($rows);
+        $r = karaoke_bulk_upsert($pdo, array_values($byKey), $now);
+        $gone = $pdo->prepare("UPDATE karaoke_songs SET available = 0, updated_at = ? WHERE source = 'local' AND available = 1 AND seen_at < ?");
+        $gone->execute([$now, $now]);
+        $summary = ['source' => 'local', 'songs' => count($byKey), 'added' => $r['added'], 'updated' => $r['updated'], 'unavailable' => $gone->rowCount(),
+            'hidden' => count($rows) - count($byKey), 'skipped' => $skipped, 'por_aprobar' => karaoke_count_por_aprobar($pdo), 'imported_at' => karaoke_iso($now)];
+        if ($mismatch) {
+            $summary['natural_key_mismatch'] = $mismatch;
+        }
+        karaoke_save_setting($pdo, 'karaoke_local_import', json_encode($summary, JSON_UNESCAPED_UNICODE));
+        karaoke_agent_row($pdo);
+        $pdo->prepare('UPDATE karaoke_agent SET last_sync_at = ?, last_sync_songs = ? WHERE id = 1')->execute([$now, count($byKey)]);
+        return $summary;
+    });
+}
+
+/**
  * Importa el catálogo en línea de KaraFun desde el CSV que exporta KaraFun (Id;Title;Artist;…,
  * separado por «;»). Alternativa a la sincronización del agente (contrato §2, source karafun):
  * mismas claves kf:<id>. Además guarda la posición en el CSV (de más a menos cantada) como
@@ -881,14 +1004,8 @@ function karaoke_catalog_commit(PDO $pdo, array $body): array
         $source = $sync['source'];
         $rows = $pdo->prepare('SELECT natural_key, title, artist, duration_s, folder, file, kf_id, youtube_id FROM karaoke_catalog_staging WHERE sync_id = ? ORDER BY chunk_index, id');
         $rows->execute([$sync['id']]);
-        // Una misma canción en varios archivos: gana la que ya está en su carpeta de letra.
-        $byKey = [];
-        foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $prev = $byKey[$r['natural_key']] ?? null;
-            if ($prev === null || (karaoke_is_por_aprobar($prev['folder']) && !karaoke_is_por_aprobar($r['folder']))) {
-                $byKey[$r['natural_key']] = $r;
-            }
-        }
+        // Una misma canción en varios archivos: gana la de su carpeta de letra; «Corregir» no entra.
+        $byKey = karaoke_pick_copies($rows->fetchAll(PDO::FETCH_ASSOC));
         $songs = [];
         foreach ($byKey as $key => $r) {
             $songs[] = ['natural_key' => (string) $key, 'source' => $source, 'kf_id' => $r['kf_id'] === null ? null : (int) $r['kf_id'], 'title' => $r['title'], 'artist' => $r['artist'],

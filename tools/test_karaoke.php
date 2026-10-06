@@ -742,6 +742,37 @@ karaoke_catalog_commit($pdo, ['sync_id' => $sync['sync_id'], 'total_chunks' => 1
 eq((int) $pdo->query("SELECT COUNT(*) FROM karaoke_songs WHERE source = 'karafun' AND available = 1")->fetchColumn(), 4, 'y la sincronización local no toca las de KaraFun');
 file_put_contents($csv, "Nombre,Artista\nx,y\n");
 throws(static fn () => karaoke_import_karafun_csv($pdo, $csv), 'csv_columns', 'un CSV que no es de KaraFun se rechaza');
+
+// CSV del catálogo local que exporta el agente: se detecta por la columna NaturalKey.
+$H = 'Id;Title;Artist;Year;Duo;Explicit;Date Added;Styles;Languages;Duration;Folder;File;NaturalKey;YoutubeId';
+file_put_contents($csv, implode("\n", [
+    $H,
+    'L1;Hit Em Up;2Pac;;0;0;2022-11-17;Karaoke local;;318;0-9;0-9/2Pac - Hit Em Up.mp4;2pac|hit em up;',
+    'L2;Hit Em Up;2Pac;;0;0;2022-11-17;Karaoke local;;318;Repetidos;Repetidos/2Pac - Hit Em Up.mp4;2pac|hit em up;',
+    'L3;Bohemian Rhapsody;Queen;;0;0;2022-11-17;Karaoke local;;354;Repetidos;Repetidos/Queen.mp4;queen|bohemian rhapsody;',
+    'L4;Destrozaste Mi Alma;Kaleth Morales;;0;0;2022-11-17;Karaoke local;;0;Corregir;Corregir/Kaleth.mp4;kaleth morales|destrozaste mi alma;',
+    'L5;El Sol No Regresa;La 5ª Estación;;0;0;2022-11-17;Karaoke local;;240;L;L/x.mp4;la 5a estacion|el sol no regresa;',
+    'L6;Mal;Fila;;0;0;;;;x;L;L/y.mp4;Mal|Clave;',
+    'L7;Never Gonna;Rick Astley;;0;0;;;;0;Por aprobar;Por aprobar/Rick [dQw4w9WgXcQ].mp4;rick astley|never gonna;dQw4w9WgXcQ',
+]) . "\n");
+karaoke_clock(karaoke_clock() + 10);
+$loc = karaoke_import_catalog_csv($pdo, $csv);
+eq([$loc['source'], $loc['songs'], $loc['skipped'], $loc['hidden']], ['local', 4, 1, 2], 'CSV local: 4 canciones, 1 fila inválida, 2 repetidas u ocultas');
+$st = $pdo->prepare('SELECT folder, available FROM karaoke_songs WHERE natural_key = ?');
+$st->execute(['2pac|hit em up']);
+eq($st->fetch(), ['folder' => '0-9', 'available' => 1], 'repetida: gana la copia de su carpeta de letra');
+$st->execute(['queen|bohemian rhapsody']);
+eq($st->fetch(), ['folder' => 'Repetidos', 'available' => 1], 'si solo está en «Repetidos», se ofrece igual');
+$st->execute(['kaleth morales|destrozaste mi alma']);
+eq($st->fetch(), false, '«Corregir» (archivos dañados) no se ofrece');
+eq($loc['natural_key_mismatch'], ['la 5a estacion|el sol no regresa'], 'la clave del agente se guarda tal cual y se avisa si no coincide con la regla');
+eq($pdo->query("SELECT youtube_id FROM karaoke_songs WHERE natural_key = 'rick astley|never gonna'")->fetchColumn(), 'dQw4w9WgXcQ', 'YoutubeId de «Por aprobar»');
+eq(karaoke_search($pdo, 'bohemian')[0]['duration_s'], 354, 'en la búsqueda, la local va antes que la de KaraFun');
+eq((int) $pdo->query("SELECT COUNT(*) FROM karaoke_songs WHERE source = 'local' AND natural_key = 'otro|tema' AND available = 1")->fetchColumn(), 0, 'lo local que no vino en el CSV pasa a no disponible');
+eq((int) $pdo->query("SELECT COUNT(*) FROM karaoke_songs WHERE source = 'karafun' AND available = 1")->fetchColumn(), 4, 'y no toca KaraFun en línea');
+eq(karaoke_import_catalog_csv($pdo, $csv)['added'], 0, 'reimportar el mismo CSV local no duplica');
+file_put_contents($csv, "Id;Title;Artist\n99;\"Otra\";Alguien\n12617;\"Bohemian Rhapsody\";Queen\n5632;\"Mr. Brightside (Live)\";\"The Killers\"\n70001;\"Corazón partío\";\"Alejandro Sanz\"\n70002;\"La camisa negra\";Juanes\n");
+eq(karaoke_import_catalog_csv($pdo, $csv)['source'], 'karafun', 'sin NaturalKey se importa como catálogo de KaraFun');
 unlink($csv);
 
 // ---------------------------------------------------------------------------

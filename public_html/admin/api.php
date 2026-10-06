@@ -286,6 +286,7 @@ function karaoke_state(): array
             'last_sync' => $lastSync('local'),
             'last_sync_karafun' => $lastSync('karafun'),
             'karafun_import' => json_decode(karaoke_setting($pdo, 'karaoke_karafun_import'), true) ?: null,
+            'local_import' => json_decode(karaoke_setting($pdo, 'karaoke_local_import'), true) ?: null,
         ],
         'token_set' => karaoke_setting($pdo, 'karaoke_agent_token') !== '',
         'settings' => array_map(static fn (string $k): int => karaoke_setting_int($pdo, $k), array_combine(array_keys(KARAOKE_DEFAULTS), array_keys(KARAOKE_DEFAULTS))),
@@ -715,16 +716,16 @@ try {
             audit($aid, 'resync', 'karaoke_catalog');
             respond(['ok' => true, 'karaoke' => karaoke_state()]);
 
-        case 'POST karaoke.karafun.import':
+        case 'POST karaoke.catalog.import':
             $file = $_FILES['csv'] ?? null;
             if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-                throw new ApiError(($file['error'] ?? 0) === UPLOAD_ERR_INI_SIZE ? 'El archivo supera el tamaño que permite el servidor.' : 'Elige el archivo CSV del catálogo de KaraFun.');
+                throw new ApiError(($file['error'] ?? 0) === UPLOAD_ERR_INI_SIZE ? 'El archivo supera el tamaño que permite el servidor.' : 'Elige el archivo CSV del catálogo.');
             }
             if ($file['size'] > 40 * 1024 * 1024) {
                 throw new ApiError('El archivo pesa demasiado (máximo 40 MB).');
             }
             @set_time_limit(300);
-            $summary = karaoke_import_karafun_csv($pdo, $file['tmp_name']);
+            $summary = karaoke_import_catalog_csv($pdo, $file['tmp_name']);
             audit($aid, 'import', 'karaoke_catalog');
             respond(['ok' => true, 'summary' => $summary, 'karaoke' => karaoke_state()]);
 
