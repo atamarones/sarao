@@ -402,6 +402,25 @@ check((string) karaoke_request($pdo, $rid)['error'] !== '', 'motivo guardado');
 $late = karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $cid, 'ok' => true, 'result' => ['queue_pos' => 0]]);
 check($late['duplicate'] ?? false, 'un ack tardío de una orden ya fallida no cambia nada');
 
+// El agente añade la canción y se cae antes de confirmar; la canción suena y termina antes de
+// que venza el lease. La orden no se reentrega: volver a añadirla la haría sonar dos veces.
+$rid2 = req($pdo, $t1, $night, ['song_id' => $sid])['id'];
+$c2 = poll($pdo, [])['commands'][0]['id'];
+poll($pdo, [entry($pdo, $rid2, 0, 'playing')]);
+poll($pdo, []);
+eq(status_of($pdo, $rid2), 'cantada', 'sin ack, la cola real la llevó hasta cantada');
+karaoke_clock(karaoke_clock() + KARAOKE_LEASE_S + 1);
+eq(array_column(poll($pdo, [])['commands'], 'id'), [], 'vencido el lease, la orden ya no se reentrega');
+eq(karaoke_command($pdo, $c2)['status'], 'done', 'queda done');
+eq(json_decode(karaoke_command($pdo, $c2)['result'], true), ['skipped' => 'request_cantada'], 'con el motivo');
+eq(karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $c2, 'ok' => true, 'result' => ['queue_pos' => 0]])['duplicate'] ?? false, true, 'el ack tardío es un duplicado sin efectos');
+
+// Descarga que ya nadie espera: no se entrega y la próxima petición del mismo video la reintenta.
+$yr = karaoke_request_create($pdo, $t1, $night, ['id' => uuid(), 'singer' => 'Ana', 'youtube_url' => 'https://youtu.be/ccccccccccc'], static fn () => ['exists' => true, 'title' => null]);
+karaoke_request_cancel($pdo, $yr['id'], 'mesa', (int) $t1['id']);
+eq(array_column(poll($pdo, [])['commands'], 'type'), [], 'la descarga cancelada por todos no se entrega');
+eq(karaoke_download($pdo, 'ccccccccccc')['status'], 'failed', 'y queda lista para reintentarse');
+
 // Máximo 10 órdenes por poll, ordenadas por id.
 for ($i = 0; $i < 12; $i++) {
     karaoke_command_create($pdo, 'catalog.resync', []);

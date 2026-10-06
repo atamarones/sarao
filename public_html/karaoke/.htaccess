@@ -1,0 +1,5 @@
+# Karaoke por mesa. Sin RewriteEngine aquí: así siguen valiendo las reglas del .htaccess raíz (HTTPS, archivos ocultos).
+# PHP por CGI/LiteSpeed puede esconder la cabecera Authorization; la API del agente la necesita.
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>

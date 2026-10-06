@@ -31,7 +31,7 @@ function is_installed(): bool
 }
 
 /** Claves de settings que nunca deben llegar al navegador (tokens de integraciones). */
-const SECRET_SETTINGS = ['ig_token', 'pos_feed_token'];
+const SECRET_SETTINGS = ['ig_token', 'pos_feed_token', 'karaoke_agent_token', 'karaoke_salt'];
 
 function public_settings(array $s): array
 {

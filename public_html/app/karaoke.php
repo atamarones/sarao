@@ -161,10 +161,11 @@ function karaoke_parse_youtube(string $input): string
     if ($url === '') {
         throw new KaraokeError('Pega el enlace del video de YouTube.', 422, 'youtube_empty');
     }
-    if (strlen($url) > 300 || preg_match('/\s/u', $url)) {
+    $hasScheme = (bool) preg_match('#^[a-z][a-z0-9+.-]*://#i', $url);
+    if (($hasScheme || str_contains($url, '://')) && (strlen($url) > 300 || preg_match('/\s/u', $url))) {
         throw new KaraokeError('Pega solo el enlace del video, sin texto adicional ni varios enlaces.', 422, 'youtube_not_url');
     }
-    if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $url)) {
+    if (!$hasScheme) {
         throw new KaraokeError('Eso no es un enlace. Abre el video en YouTube, toca «Compartir» y copia el enlace (empieza por https://).', 422, 'youtube_not_url');
     }
     $p = parse_url($url);
@@ -994,6 +995,29 @@ function karaoke_command_failed(PDO $pdo, array $cmd, string $message): void
 }
 
 /**
+ * Una orden que ya no hace falta no se reentrega (devuelve el motivo, o null si sigue vigente):
+ * - enqueue cuyo pedido ya no está «enviado»: la cola real de KaraFun ya lo mostró (o ya sonó)
+ *   aunque el agente se cayera antes de confirmar; reentregarla lo haría sonar dos veces.
+ * - download que ya nadie espera (todas las mesas cancelaron).
+ * - remove de un pedido que ya no está en KaraFun.
+ */
+function karaoke_command_obsolete(PDO $pdo, array $c): ?string
+{
+    if (in_array($c['type'], ['enqueue', 'remove'], true) && $c['request_id']) {
+        $r = karaoke_request($pdo, $c['request_id']);
+        $live = $c['type'] === 'enqueue' ? ['enviado'] : ['enviado', 'en_cola'];
+        return $r && in_array($r['status'], $live, true) ? null : 'request_' . ($r['status'] ?? 'missing');
+    }
+    if ($c['type'] === 'download') {
+        $yt = (string) (json_decode((string) $c['payload'], true)['youtube_id'] ?? '');
+        $st = $pdo->prepare("SELECT COUNT(*) FROM karaoke_requests WHERE youtube_id = ? AND status = 'descargando'");
+        $st->execute([$yt]);
+        return (int) $st->fetchColumn() > 0 ? null : 'no_requests';
+    }
+    return null;
+}
+
+/**
  * Entrega hasta 10 órdenes pendientes o con lease vencido, por id, y las arrienda 30 s.
  * Una orden que agotó sus 5 intentos sin confirmación pasa a failed.
  */
@@ -1007,6 +1031,18 @@ function karaoke_lease_commands(PDO $pdo): array
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $c) {
         if (count($out) >= KARAOKE_POLL_MAX_COMMANDS) {
             break;
+        }
+        if (($skip = karaoke_command_obsolete($pdo, $c)) !== null) {
+            karaoke_tx($pdo, static function () use ($pdo, $c, $now, $skip): void {
+                $up = $pdo->prepare("UPDATE karaoke_commands SET status = 'done', result = ?, updated_at = ?, done_at = ? WHERE id = ? AND status = ?");
+                $up->execute([json_encode(['skipped' => $skip]), $now, $now, $c['id'], $c['status']]);
+                if ($up->rowCount() === 1 && $c['type'] === 'download') {
+                    $yt = (string) (json_decode((string) $c['payload'], true)['youtube_id'] ?? '');
+                    $pdo->prepare("UPDATE karaoke_downloads SET status = 'failed', error = ?, updated_at = ? WHERE youtube_id = ? AND status = 'downloading'")
+                        ->execute(['Nadie esperaba la descarga.', $now, $yt]);
+                }
+            });
+            continue;
         }
         if ((int) $c['attempts'] >= KARAOKE_MAX_ATTEMPTS) {
             karaoke_tx($pdo, static function () use ($pdo, $c, $now): void {
