@@ -256,6 +256,8 @@ function karaoke_schema_statements(string $driver): array
             kf_connected $bool NOT NULL DEFAULT 0,
             kf_state VARCHAR(20) NULL,
             queue_snapshot TEXT NULL,
+            kf_session VARCHAR(100) NULL,
+            kf_started_at VARCHAR(40) NULL,
             acks_pending INT NOT NULL DEFAULT 0,
             last_sync_at DATETIME NULL,
             last_sync_songs INT NULL

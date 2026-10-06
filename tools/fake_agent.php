@@ -14,6 +14,8 @@ declare(strict_types=1);
  *   --karafun-catalog=N  canciones de KaraFun en línea que sube al arrancar (0 = no sube).
  *   --download-seconds=N cuánto tarda una descarga (5); mientras tanto la reporta en «working».
  *   --no-singer-for-downloads  una canción recién descargada entra sin cantante (singer_shown: false).
+ *   --restart-at=N       a los N segundos simula que KaraFun se reinició: sesión nueva, cola vaciada y
+ *                        un poll con connected false (la nube debe reenviar lo que estaba en KaraFun).
  *   --drop-ack-once      ejecuta el primer enqueue pero "se cae" antes de confirmarlo: prueba la
  *                        reentrega tras el lease y la reconciliación contra la cola (no lo duplica).
  *   --fail-download=ID   la descarga de ese youtube_id falla con too_long.
@@ -25,7 +27,7 @@ declare(strict_types=1);
 
 const AGENT_VERSION = 'fake-1.0.0';
 
-$o = getopt('', ['url:', 'token:', 'seconds:', 'interval:', 'song-seconds:', 'catalog:', 'karafun-catalog:', 'download-seconds:', 'no-singer-for-downloads', 'drop-ack-once', 'fail-download:', 'offline-after:']);
+$o = getopt('', ['url:', 'token:', 'seconds:', 'interval:', 'song-seconds:', 'catalog:', 'karafun-catalog:', 'download-seconds:', 'no-singer-for-downloads', 'restart-at:', 'drop-ack-once', 'fail-download:', 'offline-after:']);
 if (empty($o['url']) || empty($o['token'])) {
     fwrite(STDERR, "Uso: php tools/fake_agent.php --url=http://127.0.0.1:8000 --token=<64 hex> [--seconds=60] [--catalog=300]\n");
     exit(2);
@@ -39,6 +41,8 @@ $catalogSize = (int) ($o['catalog'] ?? 300);
 $karafunSize = (int) ($o['karafun-catalog'] ?? 0);
 $downloadSeconds = (int) ($o['download-seconds'] ?? 5);
 $noSingerForDownloads = isset($o['no-singer-for-downloads']);
+$restartAt = isset($o['restart-at']) ? (int) $o['restart-at'] : null;
+$kfSession = 'fake-' . getmypid() . '-' . time();
 $dropAckOnce = isset($o['drop-ack-once']);
 $failDownload = $o['fail-download'] ?? null;
 $offlineAfter = isset($o['offline-after']) ? (int) $o['offline-after'] : null;
@@ -80,16 +84,16 @@ function must(array $r, string $what): array
     return $body;
 }
 
-/** natural_key local según el contrato v2 §2 (artista|título, sin duración), implementada aparte de la nube a propósito. */
+/** natural_key local según el contrato §2 (NFKD, artista sin prefijo vN, sin duración), implementada aparte de la nube a propósito. */
 function nkey(string $artist, string $title): string
 {
     $n = static function (string $s): string {
         $s = mb_strtolower($s, 'UTF-8');
-        $s = class_exists(Normalizer::class) ? (string) Normalizer::normalize($s, Normalizer::FORM_D) : (string) iconv('UTF-8', 'ASCII//TRANSLIT', $s);
+        $s = class_exists(Normalizer::class) ? (string) Normalizer::normalize($s, Normalizer::FORM_KD) : (string) iconv('UTF-8', 'ASCII//TRANSLIT', $s);
         $s = (string) preg_replace('/\p{Mn}/u', '', $s);
         return trim((string) preg_replace('/\s+/', ' ', (string) preg_replace('/[^a-z0-9]/', ' ', $s)));
     };
-    return $n($artist) . '|' . $n($title);
+    return $n((string) preg_replace('/^\s*v\d{1,2}\s+(?=\S)/i', '', $artist)) . '|' . $n($title);
 }
 
 function fake_song(string $artist, string $title, int $dur, ?string $folder, ?string $youtubeId = null): array
@@ -229,9 +233,19 @@ while ($seconds === 0 || microtime(true) - $start < $seconds) {
         $playingSince = time();
     }
 
+    $connectedNow = true;
+    if ($restartAt !== null && $elapsed >= $restartAt) {
+        $restartAt = null;
+        $kfSession = 'fake-' . getmypid() . '-' . (time() + 1);
+        $queue = [];
+        $playingSince = null;
+        $connectedNow = false;
+        say('↻ KaraFun se reinició: sesión nueva, cola vieja vaciada (este poll va con connected false)');
+    }
     [$status, $res] = call('poll', [
         'agent_version' => AGENT_VERSION,
-        'karafun' => ['running' => true, 'connected' => true, 'state' => $queue ? 'playing' : 'idle', 'queue' => kf_status()],
+        'karafun' => ['running' => true, 'connected' => $connectedNow, 'state' => $queue ? 'playing' : 'idle', 'queue' => kf_status(),
+            'session' => $kfSession, 'started_at' => date('c')],
         'working' => array_keys($working),
         'acks_pending' => count($inFlight),
     ]);

@@ -77,6 +77,9 @@ function run_upgrades(PDO $pdo, string $driver): array
         ['karaoke_catalog_syncs', 'source', "VARCHAR(10) NOT NULL DEFAULT 'local'"],
         ['karaoke_catalog_staging', 'kf_id', 'INT NULL'],
         ['karaoke_catalog_staging', 'youtube_id', 'VARCHAR(11) NULL'],
+        // karafun.session: detectar reinicios de KaraFun.
+        ['karaoke_agent', 'kf_session', 'VARCHAR(100) NULL'],
+        ['karaoke_agent', 'kf_started_at', 'VARCHAR(40) NULL'],
     ];
     foreach ($cols as [$table, $col, $type]) {
         if (!column_exists($pdo, $driver, $table, $col)) {

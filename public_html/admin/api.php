@@ -289,6 +289,7 @@ function karaoke_state(): array
             'local_import' => json_decode(karaoke_setting($pdo, 'karaoke_local_import'), true) ?: null,
         ],
         'token_set' => karaoke_setting($pdo, 'karaoke_agent_token') !== '',
+        'intl' => extension_loaded('intl'),
         'settings' => array_map(static fn (string $k): int => karaoke_setting_int($pdo, $k), array_combine(array_keys(KARAOKE_DEFAULTS), array_keys(KARAOKE_DEFAULTS))),
         'server_time' => date('c', karaoke_clock()),
     ];
@@ -335,6 +336,7 @@ try {
         case 'GET state':
             // Una base instalada antes de esta versión gana las columnas nuevas al abrir el panel.
             run_upgrades($pdo, db_driver());
+            karaoke_migrate_search_text($pdo);
             respond(state());
 
         // ----- Categorías -----
@@ -659,6 +661,7 @@ try {
 
         // ----- Karaoke por mesa -----
         case 'GET karaoke.state':
+            karaoke_migrate_search_text($pdo);
             respond(karaoke_state());
 
         case 'POST karaoke.table.save':
@@ -708,10 +711,8 @@ try {
             respond(['ok' => true, 'karaoke' => karaoke_state()]);
 
         case 'POST karaoke.catalog.resync':
-            $source = (string) (input()['source'] ?? '');
-            if (!in_array($source, ['local', 'karafun'], true)) {
-                throw new ApiError('Fuente de catálogo no válida.');
-            }
+            // El agente ya no recorre el catálogo en línea de KaraFun: ese se carga con el CSV.
+            $source = 'local';
             karaoke_command_create($pdo, 'catalog.resync', ['source' => $source]);
             audit($aid, 'resync', 'karaoke_catalog');
             respond(['ok' => true, 'karaoke' => karaoke_state()]);

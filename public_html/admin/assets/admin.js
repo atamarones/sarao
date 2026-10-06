@@ -951,9 +951,10 @@
         <h2 class="card-title">Catálogo</h2>
         <p class="k-num"><strong>${cat.por_aprobar}</strong> en «Por aprobar»</p>
         <p class="hint">${cat.local.toLocaleString('es-CO')} canciones locales${cat.last_sync ? ` · sincronizadas ${esc(kTime(cat.last_sync.at))}` : cat.local_import ? ` · importadas ${esc(new Date(cat.local_import.imported_at).toLocaleDateString('es-CO'))}` : ' · sin sincronizar'}<br>${cat.karafun.toLocaleString('es-CO')} de KaraFun en línea${cat.last_sync_karafun ? ` · sincronizadas ${esc(new Date(cat.last_sync_karafun.at).toLocaleDateString('es-CO'))}` : cat.karafun_import ? ` · importadas ${esc(new Date(cat.karafun_import.imported_at).toLocaleDateString('es-CO'))}` : ''}</p>
+        <p class="hint">El catálogo en línea de KaraFun se carga con su CSV (karafuncatalog.csv).</p>
+        ${k.intl ? '' : '<p class="k-err">Falta la extensión PHP «intl»: actívala en hPanel → Configuración de PHP para que la búsqueda trate igual «5ª» y «5a».</p>'}
         <div class="k-actions">
           <button class="btn btn-ghost btn-sm" data-act="resync" data-source="local">Releer carpeta local</button>
-          <button class="btn btn-ghost btn-sm" data-act="resync" data-source="karafun">Releer KaraFun en línea</button>
           <label class="btn btn-ghost btn-sm k-file">Importar CSV de catálogo<input type="file" accept=".csv,text/csv" id="k-csv"></label>
         </div>
       </section>`;
@@ -1024,7 +1025,7 @@
       if (!(await confirmDialog('¿Cerrar la noche?', 'Las mesas ya no podrán pedir y se cancelan los pedidos que esperan (lo que ya está en KaraFun sigue sonando).', 'Cerrar noche'))) return;
       return run('karaoke.night.close', {}, 'Noche cerrada');
     }
-    if (act === 'resync') return run('karaoke.catalog.resync', { source: btn.dataset.source }, btn.dataset.source === 'local' ? 'Pedido enviado: el agente releerá la carpeta (unos 4 minutos).' : 'Pedido enviado: el agente subirá el catálogo en línea de KaraFun.');
+    if (act === 'resync') return run('karaoke.catalog.resync', { source: 'local' }, 'Pedido enviado: el agente releerá la carpeta (unos 4 minutos).');
     if (act === 'up' || act === 'down') return run('karaoke.request.move', { id: rid, dir: act === 'up' ? -1 : 1 });
     if (act === 'cancel') {
       if (!(await confirmDialog('¿Cancelar el pedido?', 'La mesa verá que el pedido se canceló.', 'Cancelar pedido'))) return;

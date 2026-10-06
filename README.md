@@ -15,6 +15,9 @@ public_html/            ← todo esto se sube a public_html en Hostinger
   index.php             home del sitio
   carta/index.php       carta pública (QR)
   karaoke/              página de mesa (index.php + api.php) y API del agente del bar (agent.php)
+agent/                  agente del PC del bar (Python): ejecuta las órdenes de la nube en KaraFun Player 2.
+                        Instalación y operación en agent/README.md y docs/karaoke-operacion.md
+tools/karafun/          consolas de prueba del control remoto de KaraFun (PowerShell)
   install.php           instalador de un solo uso (bórralo después de instalar)
   admin/                panel (index.php, api.php, logout.php, assets/)
   app/                  núcleo, esquema de BD y seed.json (bloqueado por .htaccess)
@@ -78,15 +81,16 @@ Abre http://127.0.0.1:8000 (sitio), http://127.0.0.1:8000/carta/ (carta) y http:
 
 ## Karaoke por mesa
 
-Diseño completo en `docs/karaoke-arquitectura.md`; el acuerdo con el agente del PC del bar, en `docs/karaoke-contrato-agente.md` (versión 2). La nube guarda los pedidos y decide el orden; el agente (lo construye otra persona según el contrato) solo ejecuta órdenes en KaraFun Player 2.
+Diseño completo en `docs/karaoke-arquitectura.md`; el acuerdo con el agente del PC del bar, en `docs/karaoke-contrato-agente.md`. La nube guarda los pedidos y decide el orden; el agente (lo construye otra persona según el contrato) solo ejecuta órdenes en KaraFun Player 2.
 
 ### Instalación
 
 1. Sube los archivos como siempre (incluida la carpeta `karaoke/` con su `.htaccess`, que deja pasar la cabecera `Authorization` del agente en Hostinger).
 2. Abre el panel: al cargar crea solas las tablas `karaoke_*` (también en una base instalada antes de esta versión). En una instalación nueva las crea `install.php`.
 3. Panel → **Karaoke** → **Generar token nuevo**. Cópialo en la configuración del agente: se muestra una sola vez. El agente llama a `https://tu-dominio/karaoke/agent.php?action=…` con `Authorization: Bearer <token>`.
-4. El catálogo lo sube el agente (la carpeta local y el catálogo en línea de KaraFun, por separado). Mientras tanto, o para ordenar por popularidad, el panel puede **Importar CSV de KaraFun** con el archivo que exporta KaraFun (`Id;Title;Artist;…`, unas 90 mil canciones, ~1 minuto); usa las mismas claves `kf:<id>` que el agente. Si Hostinger rechaza el archivo por tamaño, sube `upload_max_filesize` y `post_max_size` a 16M en hPanel → Configuración de PHP.
-5. La comprobación de que un enlace de YouTube existe usa `curl` hacia `youtube.com` (activo por defecto en Hostinger). Si no responde, el pedido se acepta y el agente lo valida al descargar.
+4. **Catálogo.** La carpeta local la sube el agente al arrancar y cada noche (botón «Releer carpeta local»). El catálogo en línea de KaraFun se carga en el panel con **Importar CSV de catálogo** y el archivo `karafuncatalog.csv` que exporta KaraFun (unas 90 mil canciones, ~1 minuto). El mismo botón acepta el CSV local que genera `agent/export_local_catalog.py`, como respaldo.
+5. **PHP:** activa la extensión `intl` (hPanel → Configuración de PHP) para que la búsqueda trate igual «5ª» y «5a»; si falta, el panel lo avisa. Si Hostinger rechaza el archivo por tamaño, sube `upload_max_filesize` y `post_max_size` a 16M en hPanel → Configuración de PHP.
+6. La comprobación de que un enlace de YouTube existe usa `curl` hacia `youtube.com` (activo por defecto en Hostinger). Si no responde, el pedido se acepta y el agente lo valida al descargar.
 
 ### Uso en el bar
 
@@ -112,7 +116,7 @@ cd public_html && php -d extension=pdo_sqlite -S 127.0.0.1:8000     # servidor l
 php tools/fake_agent.php --url=http://127.0.0.1:8000 --token=<token> --catalog=300 --seconds=120 --song-seconds=15
 ```
 
-Abre el enlace del QR de una mesa (`/karaoke/?m=…`), escribe el código de la noche y pide canciones: el simulador las pone en su KaraFun de mentira, las «canta» y el panel muestra los cambios. `--karafun-catalog=N` sube además un catálogo en línea simulado; `--download-seconds=N` hace que cada descarga tarde N s (la reporta en `working`); `--no-singer-for-downloads` hace que lo recién descargado entre sin cantante; `--drop-ack-once` simula que el agente se cae antes de confirmar una orden y `--fail-download=<id>` hace fallar una descarga de YouTube.
+Abre el enlace del QR de una mesa (`/karaoke/?m=…`), escribe el código de la noche y pide canciones: el simulador las pone en su KaraFun de mentira, las «canta» y el panel muestra los cambios. `--restart-at=N` simula que KaraFun se reinicia a los N segundos (la nube reenvía lo que estaba en la cola, empezando por la que sonaba); `--karafun-catalog=N` sube además un catálogo en línea simulado; `--download-seconds=N` hace que cada descarga tarde N s (la reporta en `working`); `--no-singer-for-downloads` hace que lo recién descargado entre sin cantante; `--drop-ack-once` simula que el agente se cae antes de confirmar una orden y `--fail-download=<id>` hace fallar una descarga de YouTube.
 
 ## Copias de seguridad
 

@@ -85,7 +85,8 @@ function uuid(): string
 
 function song(string $artist, string $title, int $dur, ?string $folder = 'A'): array
 {
-    return ['natural_key' => karaoke_natural_key($artist, $title), 'source' => 'local', 'kf_id' => null, 'title' => $title, 'artist' => $artist, 'duration_s' => $dur, 'folder' => $folder, 'youtube_id' => null];
+    return ['natural_key' => karaoke_natural_key($artist, $title), 'source' => 'local', 'kf_id' => null, 'title' => $title, 'artist' => $artist, 'duration_s' => $dur, 'folder' => $folder,
+        'file' => $folder === null ? null : "$folder/$artist - $title.mp4", 'youtube_id' => null];
 }
 
 function kf_song(int $id, string $artist, string $title, int $dur = 0): array
@@ -131,6 +132,16 @@ eq(karaoke_natural_key('', 'Canción'), '|cancion', 'artista vacío');
 eq(karaoke_natural_key('Beyoncé & JAY-Z', 'Crazy in Love'), 'beyonce jay z|crazy in love', 'mayúsculas y símbolos');
 foreach (['Adriana Lucía', 'ÑANDÚ Çava', 'İstanbul', 'Dvořák — Señor', 'Ünïcödé'] as $s) {
     eq(karaoke_normalize($s, false), karaoke_normalize($s, true), "normalización sin intl igual a la de intl: $s");
+}
+foreach ([['La 5ª Estación', 'Me Dueles', 'la 5a estacion|me dueles'], ['v2 Adele', 'Make You Feel My Love', 'adele|make you feel my love'],
+    ['Ana & Jaime', 'DECIMO GRADO', 'ana jaime|decimo grado'], ['Adriana Lucía', 'En Los Días Que Te Quise!', 'adriana lucia|en los dias que te quise']] as [$a, $t, $k]) {
+    eq(karaoke_natural_key($a, $t), $k, "ejemplo del contrato: $a — $t");
+}
+eq(karaoke_natural_key('V12 Grupo Niche', 'Cali Pachanguero'), 'grupo niche|cali pachanguero', 'prefijo vNN en mayúscula');
+eq(karaoke_natural_key('v2', 'Solo'), 'v2|solo', 'un artista que se llama «v2» no se vacía');
+eq(karaoke_natural_key('Vicente Fernández', 'El Rey'), 'vicente fernandez|el rey', '«Vicente» no es un prefijo de versión');
+foreach (['Nº 5', 'La 5ª Estación', 'E=mc²'] as $x) {
+    eq(karaoke_normalize($x, false), karaoke_normalize($x, true), "NFKD sin intl igual que con intl: $x");
 }
 check(karaoke_valid_natural_key('adriana lucia|quisiera olvidarte'), 'clave válida');
 check(!karaoke_valid_natural_key('Adriana Lucia|x'), 'clave con mayúsculas no es válida');
@@ -345,7 +356,7 @@ eq(count($out['commands']), 3, 'cola vacía: 3 órdenes enqueue');
 eq(array_column($out['commands'], 'type'), ['enqueue', 'enqueue', 'enqueue'], 'tipo enqueue');
 $c0 = $out['commands'][0];
 eq($c0['payload']['request_id'], $ids[0], 'la primera orden es el primer turno');
-eq($c0['payload']['song'], ['natural_key' => 'juanes|a dios le pido', 'source' => 'local', 'kf_id' => null, 'title' => 'A Dios le pido', 'artist' => 'Juanes', 'duration_s' => 215], 'payload.song en el formato de canción del contrato v2');
+eq($c0['payload']['song'], ['natural_key' => 'juanes|a dios le pido', 'source' => 'local', 'kf_id' => null, 'title' => 'A Dios le pido', 'artist' => 'Juanes', 'duration_s' => 215, 'file' => 'A/Juanes - A Dios le pido.mp4'], 'payload.song con file para que el agente la añada por ruta si hace falta');
 eq($c0['payload']['singer'], 'Ana · ' . karaoke_request($pdo, $ids[0])['marker'], 'payload.singer con marcador');
 check((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d-05:00$/', $c0['lease_until']), 'lease_until en ISO 8601 con zona de Bogotá');
 eq(status_of($pdo, $ids[0]), 'enviado', 'pedido enviado');
@@ -511,6 +522,54 @@ $pollW([], [$manual]);
 eq(status_of($pdo, $yr['id']), 'cantada', 'la que sonaba sin cantante desaparece: cantada');
 
 // ---------------------------------------------------------------------------
+section('Reinicio de KaraFun (karafun.session)');
+$pdo = fresh_db();
+$night = karaoke_night_open($pdo);
+$tA = karaoke_table($pdo, karaoke_table_save($pdo, null, 1, ''));
+$tB = karaoke_table($pdo, karaoke_table_save($pdo, null, 2, ''));
+$sid = add_song($pdo, 'Joe Arroyo', 'Rebelión');
+$pollS = static fn (?string $session, array $queue, bool $connected = true) => karaoke_agent_dispatch($pdo, 'poll', ['agent_version' => 'test',
+    'karafun' => ['running' => true, 'connected' => $connected, 'state' => 'playing', 'queue' => $queue, 'session' => $session, 'started_at' => '2026-10-06T21:00:00-05:00'], 'working' => [], 'acks_pending' => 0]);
+$rs = [];
+foreach ([$tA, $tB, $tA, $tB] as $t) {
+    $rs[] = req($pdo, $t, $night, ['song_id' => $sid])['id'];
+}
+$first = $pollS('pid1-2100', [])['commands'];
+eq(count($first), 3, 'sesión 1: se envían 3');
+foreach ($first as $i => $c) {
+    karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $c['id'], 'ok' => true, 'result' => ['queue_pos' => $i, 'singer_shown' => true]]);
+}
+$pollS('pid1-2100', [entry($pdo, $rs[0], 0, 'playing'), entry($pdo, $rs[1], 1)]);
+eq([status_of($pdo, $rs[0]), status_of($pdo, $rs[1]), status_of($pdo, $rs[2])], ['cantando', 'en_cola', 'enviado'], 'antes del reinicio: cantando, en cola y enviado');
+$oldIds = array_column($first, 'id');
+// KaraFun se cae: el agente informa la sesión nueva con connected false mientras vacía la cola vieja.
+$during = $pollS('pid2-2130', [], false);
+eq($during['commands'], [], 'con connected false no se entrega nada');
+eq([status_of($pdo, $rs[0]), status_of($pdo, $rs[1]), status_of($pdo, $rs[2])], ['enviado', 'enviado', 'enviado'], 'lo que estaba en KaraFun vuelve a «enviado» (no «retirado» ni «cantada»)');
+$after = $pollS('pid2-2130', []);
+eq(array_column(array_column($after['commands'], 'payload'), 'request_id'), [$rs[0], $rs[1], $rs[2]], 'se reenvía en orden, empezando por el que se estaba cantando');
+check(!array_intersect(array_column($after['commands'], 'id'), $oldIds), 'con órdenes nuevas (ids nuevos)');
+eq(status_of($pdo, $rs[3]), 'en_espera', 'el resto sigue esperando su turno en la nube');
+$log = $pdo->prepare("SELECT COUNT(*) FROM karaoke_request_log WHERE request_id = ? AND to_status IN ('retirado', 'cantada')");
+$log->execute([$rs[0]]);
+eq((int) $log->fetchColumn(), 0, 'el que cantaba no quedó como cantado');
+eq($pollS('pid2-2130', [])['commands'], [], 'la misma sesión no vuelve a reenviar');
+foreach ($after['commands'] as $i => $c) {
+    karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $c['id'], 'ok' => true, 'result' => ['queue_pos' => $i, 'singer_shown' => true]]);
+}
+$pollS('pid2-2130', [entry($pdo, $rs[0], 0, 'playing'), entry($pdo, $rs[1], 1), entry($pdo, $rs[2], 2)]);
+eq(status_of($pdo, $rs[0]), 'cantando', 'vuelve a sonar primero');
+// Un pedido que el encargado había mandado quitar no se reenvía.
+karaoke_request_remove($pdo, $rs[2]);
+$pollS('pid3-2200', [], false);
+eq(status_of($pdo, $rs[2]), 'retirado', 'con un «quitar» pendiente, el reinicio lo deja retirado');
+eq(array_column(array_column($pollS('pid3-2200', [])['commands'], 'payload'), 'request_id'), [$rs[0], $rs[1], $rs[3]], 'se reenvía lo demás y el hueco pasa al siguiente turno');
+// La primera sesión que ve la nube no es un reinicio.
+$pdo2 = fresh_db();
+karaoke_agent_dispatch($pdo2, 'poll', ['agent_version' => 't', 'karafun' => ['running' => true, 'connected' => true, 'queue' => [], 'session' => 'pid9'], 'working' => []]);
+eq($pdo2->query('SELECT kf_session FROM karaoke_agent WHERE id = 1')->fetchColumn(), 'pid9', 'se guarda la sesión');
+
+// ---------------------------------------------------------------------------
 section('ack idempotente y reintentos');
 $pdo = fresh_db();
 $night = karaoke_night_open($pdo);
@@ -551,7 +610,7 @@ karaoke_request_remove($pdo, $r2);
 karaoke_request_remove($pdo, $r2);
 $rm = poll($pdo, [entry($pdo, $r1, 0, 'playing'), entry($pdo, $r2, 1)])['commands'];
 eq(array_column($rm, 'type'), ['remove'], 'una sola orden remove aunque se pulse dos veces');
-eq($rm[0]['payload'], ['request_id' => $r2, 'singer' => karaoke_singer_label(karaoke_request($pdo, $r2)), 'song' => ['natural_key' => 'carlos vives|la gota fria', 'source' => 'local', 'kf_id' => null, 'title' => 'La gota fría', 'artist' => 'Carlos Vives', 'duration_s' => 200]], 'payload remove según el contrato v2 (con song)');
+eq($rm[0]['payload'], ['request_id' => $r2, 'singer' => karaoke_singer_label(karaoke_request($pdo, $r2)), 'song' => ['natural_key' => 'carlos vives|la gota fria', 'source' => 'local', 'kf_id' => null, 'title' => 'La gota fría', 'artist' => 'Carlos Vives', 'duration_s' => 200, 'file' => 'A/Carlos Vives - La gota fría.mp4']], 'payload remove según el contrato (con song)');
 karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $rm[0]['id'], 'ok' => true, 'result' => ['removed' => true]]);
 eq(status_of($pdo, $r2), 'retirado', 'remove confirmado: retirado');
 
@@ -721,7 +780,7 @@ eq(array_column(karaoke_search($pdo, 'killers'), 'artist'), ['The Killers'], 'po
 $sidKf = karaoke_search($pdo, 'brightside')[0]['id'];
 req($pdo, $t1, $night, ['song_id' => $sidKf]);
 $cmd = poll($pdo, [])['commands'][0];
-eq($cmd['payload']['song'], ['natural_key' => 'kf:5632', 'source' => 'karafun', 'kf_id' => 5632, 'title' => 'Mr. Brightside', 'artist' => 'The Killers', 'duration_s' => 0], 'enqueue de KaraFun en línea con source y kf_id');
+eq($cmd['payload']['song'], ['natural_key' => 'kf:5632', 'source' => 'karafun', 'kf_id' => 5632, 'title' => 'Mr. Brightside', 'artist' => 'The Killers', 'duration_s' => 0, 'file' => null], 'enqueue de KaraFun en línea con source y kf_id, sin file');
 // Reimportar sin una canción: available = 0; renombrar: se reindexa.
 karaoke_clock(karaoke_clock() + 10);
 file_put_contents($csv, implode("\n", [
@@ -766,7 +825,14 @@ $st->execute(['queen|bohemian rhapsody']);
 eq($st->fetch(), ['folder' => 'Repetidos', 'available' => 1], 'si solo está en «Repetidos», se ofrece igual');
 $st->execute(['kaleth morales|destrozaste mi alma']);
 eq($st->fetch(), false, '«Corregir» (archivos dañados) no se ofrece');
-eq($loc['natural_key_mismatch'], ['la 5a estacion|el sol no regresa'], 'la clave del agente se guarda tal cual y se avisa si no coincide con la regla');
+eq(isset($loc['natural_key_mismatch']), false, 'La 5ª Estación: la clave del agente (NFKD) coincide con la de la nube');
+// Base guardada con la normalización anterior (NFD): se reindexa una vez.
+$pdo->exec("UPDATE karaoke_songs SET search_text = 'la 5 estacion el sol no regresa' WHERE natural_key = 'la 5a estacion|el sol no regresa'");
+$pdo->exec("DELETE FROM karaoke_song_words WHERE song_id = (SELECT id FROM karaoke_songs WHERE natural_key = 'la 5a estacion|el sol no regresa')");
+$pdo->exec("DELETE FROM settings WHERE k = 'karaoke_search_norm'");
+check(karaoke_migrate_search_text($pdo) >= 1, 'la migración reindexa lo que cambió');
+eq(karaoke_migrate_search_text($pdo), 0, 'y no vuelve a correr');
+eq(karaoke_search($pdo, '5a estacion')[0]['title'] ?? null, 'El Sol No Regresa', 'buscar «5a estacion» encuentra «La 5ª Estación»');
 eq($pdo->query("SELECT youtube_id FROM karaoke_songs WHERE natural_key = 'rick astley|never gonna'")->fetchColumn(), 'dQw4w9WgXcQ', 'YoutubeId de «Por aprobar»');
 eq(array_column(karaoke_search($pdo, 'bohemian'), 'source'), ['karafun', 'local'], 'en la búsqueda, KaraFun en línea va antes que la local');
 eq((int) $pdo->query("SELECT COUNT(*) FROM karaoke_songs WHERE source = 'local' AND natural_key = 'otro|tema' AND available = 1")->fetchColumn(), 0, 'lo local que no vino en el CSV pasa a no disponible');

@@ -34,8 +34,9 @@ const KARAOKE_TRANSITIONS = [
     'descargado' => ['en_espera', 'fallido', 'cancelado'],
     'en_espera' => ['enviado', 'fallido', 'cancelado'],
     'enviado' => ['en_cola', 'cantando', 'fallido', 'retirado'],
-    'en_cola' => ['cantando', 'cantada', 'retirado'],
-    'cantando' => ['cantada'],
+    // en_cola/cantando → enviado: solo cuando KaraFun se reinicia y la nube los vuelve a enviar.
+    'en_cola' => ['cantando', 'cantada', 'retirado', 'enviado'],
+    'cantando' => ['cantada', 'enviado'],
 ];
 
 const KARAOKE_DEFAULTS = [
@@ -124,10 +125,12 @@ function karaoke_normalize(string $s, ?bool $useIntl = null): string
     static $map = null;
     $s = mb_strtolower($s, 'UTF-8');
     if ($useIntl ?? class_exists(Normalizer::class)) {
-        // Igual que el agente: NFD y fuera las marcas combinantes.
-        $s = (string) Normalizer::normalize($s, Normalizer::FORM_D);
+        // Igual que el agente (contrato §2): NFKD, así «5ª» → «5a», «Nº» → «no», «²» → «2».
+        $s = (string) Normalizer::normalize($s, Normalizer::FORM_KD);
     } else {
-        $map ??= array_combine(mb_str_split($from), mb_str_split($to));
+        // Sin intl: letras con tilde más los equivalentes de compatibilidad más comunes.
+        $map ??= array_combine(mb_str_split($from), mb_str_split($to))
+            + ['ª' => 'a', 'º' => 'o', '¹' => '1', '²' => '2', '³' => '3', 'ﬀ' => 'ff', 'ﬁ' => 'fi', 'ﬂ' => 'fl', 'ﬃ' => 'ffi', 'ﬄ' => 'ffl', '…' => '...', '½' => '1⁄2'];
         $s = strtr($s, $map);
     }
     $s = (string) preg_replace('/\p{Mn}+/u', '', $s);
@@ -141,7 +144,45 @@ function karaoke_normalize(string $s, ?bool $useIntl = null): string
  */
 function karaoke_natural_key(string $artist, string $title): string
 {
-    return karaoke_normalize($artist) . '|' . karaoke_normalize($title);
+    return karaoke_normalize(karaoke_artist_without_version($artist)) . '|' . karaoke_normalize($title);
+}
+
+/** Texto de búsqueda de una canción: la misma normalización que natural_key (contrato §2). */
+function karaoke_search_text(string $artist, string $title): string
+{
+    return mb_substr(karaoke_normalize(karaoke_artist_without_version($artist) . ' ' . $title), 0, 420);
+}
+
+/**
+ * Reindexa una sola vez las canciones guardadas con la normalización anterior (NFD): solo cambian
+ * las que tienen caracteres de compatibilidad (ª, º, ², ligaduras) o artista con prefijo «vN».
+ */
+function karaoke_migrate_search_text(PDO $pdo): int
+{
+    if (karaoke_setting($pdo, 'karaoke_search_norm') === 'nfkd-1') {
+        return 0;
+    }
+    @set_time_limit(300);
+    return karaoke_tx($pdo, static function () use ($pdo): int {
+        $changed = 0;
+        $up = $pdo->prepare('UPDATE karaoke_songs SET search_text = ? WHERE id = ?');
+        foreach ($pdo->query('SELECT id, title, artist, search_text FROM karaoke_songs')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $search = karaoke_search_text($r['artist'], $r['title']);
+            if ($search !== $r['search_text']) {
+                $up->execute([$search, $r['id']]);
+                karaoke_set_words($pdo, (int) $r['id'], $search);
+                $changed++;
+            }
+        }
+        karaoke_save_setting($pdo, 'karaoke_search_norm', 'nfkd-1');
+        return $changed;
+    });
+}
+
+/** «v2 Adele» → «Adele»: las segundas versiones de un archivo son la misma canción (contrato §2). */
+function karaoke_artist_without_version(string $artist): string
+{
+    return (string) preg_replace('/^\s*v\d{1,2}\s+(?=\S)/i', '', $artist);
 }
 
 function karaoke_valid_natural_key(string $k): bool
@@ -679,7 +720,7 @@ function karaoke_bulk_upsert(PDO $pdo, array $songs, string $seenAt): array
         $vals = [];
         $params = [];
         foreach ($chunk as $s) {
-            $search = mb_substr(karaoke_normalize($s['artist'] . ' ' . $s['title']), 0, 420);
+            $search = karaoke_search_text($s['artist'], $s['title']);
             $vals[] = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)';
             array_push($params, $s['source'], $s['natural_key'], $s['title'], $s['artist'], $s['duration_s'], $search, $s['kf_id'], $s['popularity'] ?? null, $s['folder'], $s['file'] ?? null, $s['youtube_id'] ?? null, $seenAt, $now, $now);
             $old = $existing[$s['natural_key']] ?? null;
@@ -1655,7 +1696,7 @@ function karaoke_fill_buffer(PDO $pdo, array $queue): int
     $inFlight = (int) $pdo->query("SELECT COUNT(*) FROM karaoke_requests WHERE status = 'enviado'")->fetchColumn();
     $buffer = count($queue) + $inFlight;
     $emitted = 0;
-    $next = $pdo->prepare("SELECT r.*, s.natural_key, s.title, s.artist, s.duration_s, s.available, s.source, s.kf_id
+    $next = $pdo->prepare("SELECT r.*, s.natural_key, s.title, s.artist, s.duration_s, s.available, s.source, s.kf_id, s.file
         FROM karaoke_requests r LEFT JOIN karaoke_songs s ON s.id = r.song_id
         WHERE r.night_id = ? AND r.status = 'en_espera' ORDER BY r.fair_seq, r.created_at, r.id LIMIT 1");
     for ($guard = 0; $buffer < KARAOKE_BUFFER && $guard < 50; $guard++) {
@@ -1692,7 +1733,55 @@ function karaoke_enqueue_song(array $r): array
         'title' => $r['title'],
         'artist' => $r['artist'],
         'duration_s' => (int) $r['duration_s'],
+        // Ruta relativa a Música\Karaoke: el agente la usa si KaraFun no la encuentra por nombre.
+        'file' => $r['source'] === 'local' ? ($r['file'] ?? null) : null,
     ];
+}
+
+/**
+ * KaraFun se reinició (cambió karafun.session, contrato §2): tras una caída recarga una cola vieja
+ * que el agente ya vació, así que lo que la nube había puesto en KaraFun se perdió. Esos pedidos
+ * vuelven a «enviado» (no son «retirado» ni «cantada») y se reenvían con órdenes nuevas, en su
+ * orden y empezando por el que se estaba cantando. Las órdenes viejas que seguían abiertas se cierran.
+ */
+function karaoke_karafun_restarted(PDO $pdo): int
+{
+    $st = $pdo->prepare("SELECT r.*, s.natural_key, s.title, s.artist, s.duration_s, s.source, s.kf_id, s.file, s.available
+        FROM karaoke_requests r LEFT JOIN karaoke_songs s ON s.id = r.song_id
+        WHERE r.status IN ('cantando', 'en_cola', 'enviado')
+        ORDER BY CASE r.status WHEN 'cantando' THEN 0 WHEN 'en_cola' THEN 1 ELSE 2 END, COALESCE(r.kf_queue_pos, 999), r.sent_at, r.id");
+    $st->execute();
+    $now = karaoke_now();
+    $resent = 0;
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $open = $pdo->prepare("SELECT id, type FROM karaoke_commands WHERE request_id = ? AND type IN ('enqueue', 'remove') AND status IN ('pending', 'leased')");
+        $open->execute([$r['id']]);
+        $wantedRemoved = false;
+        foreach ($open->fetchAll(PDO::FETCH_ASSOC) as $c) {
+            $wantedRemoved = $wantedRemoved || $c['type'] === 'remove';
+            $pdo->prepare("UPDATE karaoke_commands SET status = 'done', result = ?, updated_at = ?, done_at = ? WHERE id = ? AND status IN ('pending', 'leased')")
+                ->execute([json_encode(['skipped' => 'karafun_restart']), $now, $now, $c['id']]);
+        }
+        if ($wantedRemoved) {
+            // El encargado ya había pedido quitarla: el reinicio la quitó.
+            if ($r['status'] !== 'cantando') {
+                karaoke_transition($pdo, $r['id'], $r['status'], 'retirado', 'sistema', 'Quitada de KaraFun desde el panel.');
+            }
+            continue;
+        }
+        if ($r['status'] !== 'enviado'
+            && !karaoke_transition($pdo, $r['id'], $r['status'], 'enviado', 'sistema', 'KaraFun se reinició: se vuelve a enviar.', ['kf_queue_pos' => null, 'acked_at' => null, 'sent_at' => $now])) {
+            continue;
+        }
+        $pdo->prepare('UPDATE karaoke_requests SET kf_queue_pos = NULL, acked_at = NULL, singer_shown = 1, sent_at = ?, updated_at = ? WHERE id = ?')->execute([$now, $now, $r['id']]);
+        karaoke_command_create($pdo, 'enqueue', [
+            'request_id' => $r['id'],
+            'song' => karaoke_enqueue_song($r),
+            'singer' => karaoke_singer_label($r),
+        ], $r['id']);
+        $resent++;
+    }
+    return $resent;
 }
 
 /** poll: latido + estado de KaraFun + entrega de órdenes. */
@@ -1716,11 +1805,26 @@ function karaoke_agent_poll(PDO $pdo, array $body): array
     $hasQueue = array_key_exists('queue', $kf) && $kf['queue'] !== null;
     $queue = $hasQueue ? karaoke_clean_queue($kf['queue']) : null;
     $state = is_string($kf['state'] ?? null) ? mb_substr($kf['state'], 0, 20) : null;
+    $session = $kf['session'] ?? null;
+    if ($session !== null && (!is_scalar($session) || strlen((string) $session) > 100)) {
+        throw new KaraokeError('karafun.session debe ser un texto corto.', 422, 'bad_poll');
+    }
+    $session = $session === null || $session === '' ? null : (string) $session;
+    $startedAt = is_string($kf['started_at'] ?? null) ? mb_substr($kf['started_at'], 0, 40) : null;
     $acks = is_int($body['acks_pending'] ?? null) ? max(0, $body['acks_pending']) : 0;
 
-    karaoke_tx($pdo, static function () use ($pdo, $version, $kf, $connected, $available, $queue, $state, $acks): void {
+    karaoke_tx($pdo, static function () use ($pdo, $version, $kf, $connected, $available, $queue, $state, $acks, $session, $startedAt): void {
         $prev = karaoke_agent_row($pdo);
         $prevQueue = json_decode((string) ($prev['queue_snapshot'] ?? '[]'), true) ?: [];
+        if ($session !== null && $session !== $prev['kf_session']) {
+            if ($prev['kf_session'] !== null) {
+                // Antes de comparar colas: lo que desapareció por el reinicio no es «retirado».
+                karaoke_karafun_restarted($pdo);
+                $prevQueue = [];
+                $prev['queue_snapshot'] = '[]';
+            }
+            $pdo->prepare('UPDATE karaoke_agent SET kf_session = ?, kf_started_at = ? WHERE id = 1')->execute([$session, $startedAt]);
+        }
         // Solo con KaraFun disponible y una cola reportada se puede comparar y rellenar el buffer.
         if ($available && $queue !== null) {
             karaoke_reconcile($pdo, $prevQueue, $queue);
