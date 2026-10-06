@@ -1,0 +1,135 @@
+/* El Sarao Pub · karaoke por mesa. Se carga después de menu.css y usa sus tokens:
+   misma noche azul, dorado de la corona y títulos que se "cantan". */
+
+.kk-stage { padding-bottom: 22px; }
+.kk-logo img { width: min(150px, 42vw); height: auto; filter: drop-shadow(0 6px 28px rgba(224, 0, 32, .35)); }
+.kk-table { font-size: clamp(52px, 17vw, 88px); }
+.kk-status:not(.is-open) .status-dot { background: var(--sarao); box-shadow: 0 0 0 4px rgba(255, 38, 0, .18); }
+
+.kk-main { max-width: 640px; padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+.kk-h2 { font: 800 30px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.kk-muted, .kk-hint { color: var(--muted); font-size: 14px; }
+.kk-hint { padding: 0 var(--gutter); margin: 4px 0 12px; }
+.kk-hint:empty { display: none; }
+.kk-link { color: var(--crown); font-weight: 500; text-underline-offset: 3px; }
+.kk-error {
+  padding: 10px 14px; border-radius: var(--r-sm); font-size: 14px;
+  background: rgba(255, 38, 0, .12); border: 1px solid rgba(255, 38, 0, .4); color: var(--paper);
+}
+.kk-closed {
+  margin: 32px var(--gutter); padding: 20px; border-radius: var(--r-md); text-align: center;
+  background: var(--night-2); border: 1px solid var(--line); color: var(--muted);
+}
+
+/* ---------- Botones ---------- */
+.kk-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 20px; border-radius: 999px; cursor: pointer;
+  border: 1px solid transparent; font: 600 16px/1 var(--body); white-space: nowrap;
+  transition: background .2s, transform .1s;
+}
+.kk-btn:active { transform: translateY(1px); }
+.kk-btn:disabled { opacity: .6; cursor: progress; }
+.kk-btn-primary { background: var(--crown); color: var(--night); }
+.kk-btn-primary:hover { background: #FFC933; }
+.kk-btn-small { min-height: 44px; padding: 0 16px; font-size: 15px; background: var(--night-3); border-color: rgba(244, 239, 248, .16); color: var(--paper); }
+.kk-btn-small:hover { background: #22303D; }
+.kk-btn-ghost { background: transparent; }
+
+/* ---------- Código de la noche ---------- */
+.kk-gate { margin: 28px var(--gutter) 0; padding: 22px 20px; border-radius: var(--r-lg); background: var(--night-2); border: 1px solid var(--line); display: grid; gap: 12px; text-align: center; }
+.kk-gate-form { display: grid; gap: 12px; justify-items: center; }
+.kk-code {
+  width: 8ch; min-height: 72px; padding: 0 .4ch; text-align: center;
+  font: 900 56px/1 var(--display); letter-spacing: .28em; text-indent: .28em;
+  color: var(--crown); background: var(--night); border: 1px solid rgba(244, 239, 248, .2); border-radius: var(--r-md);
+  font-variant-numeric: tabular-nums;
+}
+.kk-code::placeholder { color: rgba(244, 239, 248, .14); }
+.kk-code:focus { outline: none; border-color: var(--crown); }
+.kk-gate .kk-btn { width: min(100%, 280px); }
+
+/* ---------- Pestañas ---------- */
+.kk-nav { margin-top: 8px; }
+.kk-tabs { padding-left: var(--gutter); }
+.kk-count {
+  display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; margin-left: 6px;
+  border-radius: 999px; background: var(--sarao); color: #fff; font-size: 12px; font-weight: 600;
+}
+.kk-panel { padding-top: 16px; }
+.kk-panel > .kk-h2 { padding: 8px var(--gutter) 0; }
+.kk-search { padding-top: 4px; }
+
+/* ---------- Resultados ---------- */
+.kk-results, .kk-orders { display: grid; gap: 8px; padding: 0 var(--gutter); }
+.kk-song {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 12px 12px 12px 16px; border-radius: var(--r-md); background: var(--night-2); border: 1px solid var(--line);
+}
+.kk-song-main { min-width: 0; }
+.kk-song-title { font-weight: 600; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
+.kk-song-meta { color: var(--muted); font-size: 13px; margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.kk-tag { font: 600 10px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--crown); background: rgba(248, 184, 0, .12); padding: 3px 6px; border-radius: 5px; }
+
+/* ---------- Enlace de YouTube ---------- */
+.kk-steps { margin: 10px var(--gutter) 16px; padding-left: 20px; color: var(--muted); font-size: 14px; display: grid; gap: 4px; }
+.kk-steps strong { color: var(--paper); font-weight: 600; }
+.kk-form { display: grid; gap: 14px; padding: 0 var(--gutter); }
+.kk-form label, .kk-sheet-body label { display: grid; gap: 6px; font-size: 14px; font-weight: 500; }
+.kk-form input, .kk-sheet-body input {
+  min-height: 48px; padding: 0 14px; border-radius: var(--r-sm);
+  border: 1px solid rgba(244, 239, 248, .2); background: var(--night-2); color: var(--paper); font: 16px var(--body);
+}
+.kk-form input:focus, .kk-sheet-body input:focus { outline: none; border-color: var(--crown); }
+
+/* ---------- Mis pedidos ---------- */
+.kk-order {
+  display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--r-md);
+  background: var(--night-2); border: 1px solid var(--line);
+}
+.kk-order.is-live { border-color: rgba(248, 184, 0, .55); background: linear-gradient(160deg, rgba(248, 184, 0, .14), rgba(255, 38, 0, .08) 60%, var(--night-2)); }
+.kk-order.is-done, .kk-order.is-bad { opacity: .72; }
+.kk-order-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.kk-pill { font: 600 12px/1 var(--body); padding: 6px 10px; border-radius: 999px; background: var(--night-3); color: var(--muted); }
+.kk-pill.is-next { background: rgba(107, 77, 255, .22); color: #CFC6FF; }
+.kk-pill.is-live { background: var(--crown); color: var(--night); }
+.kk-pill.is-bad { background: rgba(255, 38, 0, .16); color: #FF9C88; }
+.kk-turn { font: 700 18px/1 var(--display); letter-spacing: .02em; color: var(--crown); text-transform: uppercase; }
+.kk-order-title { font: 800 26px/1.02 var(--display); text-transform: uppercase; overflow-wrap: anywhere; }
+.kk-order-meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.kk-order-error { color: #FF9C88; font-size: 14px; }
+.kk-order .kk-btn { justify-self: start; margin-top: 4px; }
+
+/* Firma: la canción que suena se "canta" en bucle, como la letra en la pantalla del karaoke. */
+.kk-order-title.kara { display: block; margin: 0; padding: .1em 0 0; font-size: 30px; }
+.kk-order-title.is-singing {
+  color: transparent;
+  background-image: linear-gradient(90deg, var(--rouge) 0%, var(--sarao) 22%, var(--crown) 50%, rgba(244, 239, 248, .5) 50%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  animation: kk-sing 4s linear infinite;
+}
+@keyframes kk-sing { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .kk-order-title.is-singing { animation: none; background-position: 0 0; }
+}
+
+.kk-empty { padding: 32px 16px; text-align: center; color: var(--muted); display: grid; gap: 8px; justify-items: center; }
+.kk-empty-title { font: 800 26px/1 var(--display); text-transform: uppercase; color: var(--paper); }
+
+/* ---------- Hoja para pedir ---------- */
+.kk-sheet-body { padding: 22px 20px calc(24px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
+.kk-sheet-body .sheet-title { overflow-wrap: anywhere; }
+.kk-sheet-body .kk-btn { width: 100%; }
+
+/* ---------- Aviso ---------- */
+.kk-toast {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 60;
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  max-width: calc(100% - 32px); padding: 12px 18px; border-radius: 999px;
+  background: var(--paper); color: var(--night); font-weight: 500; font-size: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
+  transition: opacity .25s, transform .25s var(--ease);
+}
+.kk-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
