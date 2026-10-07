@@ -146,6 +146,13 @@ function csrf_valid(?string $token): bool
     return is_string($token) && !empty($_SESSION['csrf']) && hash_equals($_SESSION['csrf'], $token);
 }
 
+const ROLE_ADMIN = 'admin';
+// El operador solo ve las pestañas Karaoke y Operación del panel.
+const ROLE_OPERATOR = 'operador';
+const OPERATOR_USERNAME = 'operador@saraopub.com';
+// La cuenta nace sin contraseña válida (password_verify nunca acepta '!'): la pone un admin en Ajustes.
+const NO_PASSWORD = '!';
+
 function current_admin(): ?array
 {
     start_session();
@@ -160,9 +167,14 @@ function current_admin(): ?array
         return null;
     }
     $_SESSION['last_seen'] = time();
-    $st = db()->prepare('SELECT id, username FROM admins WHERE id = ?');
+    // SELECT * para no romper una sesión abierta antes de que exista la columna role.
+    $st = db()->prepare('SELECT * FROM admins WHERE id = ?');
     $st->execute([$id]);
-    return $st->fetch() ?: null;
+    $row = $st->fetch();
+    if (!$row) {
+        return null;
+    }
+    return ['id' => $row['id'], 'username' => $row['username'], 'role' => $row['role'] ?? ROLE_ADMIN];
 }
 
 function client_ip(): string

@@ -49,7 +49,9 @@ El panel queda en `https://tu-dominio/admin/`.
 | Categorías | Crear, renombrar, ocultar, ordenar y eliminar (solo si están vacías). El orden de la lista es el orden de la carta. |
 | Promos | Promos por día y franja horaria. La del día sale marcada como «Hoy» en la carta. |
 | Testimonios | Crear, editar, ocultar, ordenar y borrar reseñas (nombre, texto, estrellas y fuente). |
-| Ajustes | Nombre, frase, dirección, teléfono, WhatsApp, Instagram, TikTok, Facebook, correo, enlace de reservas, enlace a reseñas de Google, número de canciones, aviso destacado, horario semanal y cambio de contraseña. |
+| Ajustes | Nombre, frase, dirección, teléfono, WhatsApp, Instagram, TikTok, Facebook, correo, enlace de reservas, enlace a reseñas de Google, número de canciones, aviso destacado, horario semanal, cambio de contraseña y contraseña de la cuenta del operador. |
+
+**Operador** (`operador@saraopub.com`): solo ve Karaoke y Operación, y la API le rechaza el resto. La cuenta se crea sola sin contraseña al iniciar sesión; un admin se la pone en Ajustes → «Cuenta del operador».
 
 La carta muestra «Abierto · hasta las 3 a. m.» o «Cerrado · abre hoy a las 6 p. m.» según el horario de Ajustes. Usa la hora de Bogotá y admite cierres después de medianoche.
 

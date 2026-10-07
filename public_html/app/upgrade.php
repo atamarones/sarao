@@ -55,10 +55,32 @@ function karaoke_table_name(string $createSql): string
     return $m[1];
 }
 
+/**
+ * Roles del panel: columna admins.role y la cuenta del operador (solo Karaoke y Operación).
+ * Va dentro de run_upgrades, que también corre en el login (el operador no abre la carta).
+ */
+function admin_roles_upgrade(PDO $pdo, string $driver): array
+{
+    $applied = [];
+    if (!column_exists($pdo, $driver, 'admins', 'role')) {
+        $sql = "ALTER TABLE admins ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'admin'";
+        $pdo->exec($sql);
+        $applied[] = $sql;
+    }
+    $st = $pdo->prepare('SELECT id FROM admins WHERE username = ?');
+    $st->execute([OPERATOR_USERNAME]);
+    if (!$st->fetchColumn()) {
+        $pdo->prepare('INSERT INTO admins (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)')
+            ->execute([OPERATOR_USERNAME, NO_PASSWORD, ROLE_OPERATOR, now()]);
+        $applied[] = 'admins: cuenta ' . OPERATOR_USERNAME;
+    }
+    return $applied;
+}
+
 /** Devuelve la lista de sentencias aplicadas (vacía si no había nada pendiente). */
 function run_upgrades(PDO $pdo, string $driver): array
 {
-    $applied = [];
+    $applied = admin_roles_upgrade($pdo, $driver);
     // Enlace con angelo-pos (uuid del producto en el POS) y marca de última sincronización.
     $cols = [
         ['products', 'pos_product_id', 'VARCHAR(36) NULL'],

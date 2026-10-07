@@ -137,11 +137,19 @@
   }
 
   // ---------- router ----------
-  const views = { productos: renderProducts, categorias: renderCategories, promos: renderPromos, testimonios: renderTestimonials, karaoke: renderKaraoke, operacion: renderHelp, ajustes: renderSettings };
+  // El operador solo ve Karaoke y Operación; el servidor rechaza el resto de acciones igualmente.
+  const isOperator = document.body.dataset.role === 'operador';
+  const views = isOperator
+    ? { karaoke: renderKaraoke, operacion: renderHelp }
+    : { productos: renderProducts, categorias: renderCategories, promos: renderPromos, testimonios: renderTestimonials, karaoke: renderKaraoke, operacion: renderHelp, ajustes: renderSettings };
+  const homeView = isOperator ? 'karaoke' : 'productos';
   function route() {
-    const name = (location.hash || '#productos').slice(1);
+    let name = (location.hash || '#' + homeView).slice(1);
+    if (!views[name]) name = homeView;
+    // Las vistas leen location.hash (polling del karaoke, acciones), así que se fija la real.
+    if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
     if (name !== 'karaoke') stopKaraokePolling();
-    const fn = views[name] || renderProducts;
+    const fn = views[name];
     $$('.tabs a').forEach((a) => a.setAttribute('aria-current', a.dataset.view === name ? 'page' : 'false'));
     fn();
   }
@@ -739,6 +747,13 @@
         <label>Contraseña actual<input type="password" name="current" autocomplete="current-password" required></label>
         <label>Nueva contraseña<input type="password" name="new" autocomplete="new-password" minlength="10" required><span class="hint">Mínimo 10 caracteres.</span></label>
         <div><button class="btn btn-ghost" type="submit">Cambiar contraseña</button></div>
+      </form>
+      <form class="card stack narrow" id="of" novalidate>
+        <h2 class="card-title">Cuenta del operador</h2>
+        <p class="muted">Usuario <strong>${esc(state.operator.username)}</strong>: solo ve Karaoke y Operación. <span id="of-status">${state.operator.has_password ? 'Ya tiene contraseña; poner otra reemplaza la anterior.' : 'Aún no tiene contraseña, así que no puede entrar.'}</span></p>
+        <p class="alert alert-error form-error" tabindex="-1" hidden></p>
+        <label>Contraseña del operador<input type="password" name="new" autocomplete="new-password" minlength="8" required><span class="hint">Mínimo 8 caracteres.</span></label>
+        <div><button class="btn btn-ghost" type="submit">Guardar contraseña del operador</button></div>
       </form>`;
 
     const sf = $('#sf');
@@ -785,6 +800,19 @@
         $('.form-error', pf).hidden = true;
         toast('Contraseña actualizada');
       } catch (err) { showErrors(pf, err); }
+    });
+
+    const of = $('#of');
+    of.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const r = await withBusy($('[type="submit"]', of), () => api('operator.password', { new: of.elements.new.value }));
+        state = r.state;
+        of.reset();
+        $('.form-error', of).hidden = true;
+        $('#of-status').textContent = 'Ya tiene contraseña; poner otra reemplaza la anterior.';
+        toast('Contraseña del operador guardada');
+      } catch (err) { showErrors(of, err); }
     });
   }
 
@@ -1116,7 +1144,8 @@
   }
 
   // ---------- inicio ----------
-  api('state').then((data) => { state = data; route(); }).catch((err) => {
+  if (isOperator) route();
+  else api('state').then((data) => { state = data; route(); }).catch((err) => {
     view.innerHTML = `<div class="empty-state"><p class="empty-title">No se pudo cargar la carta</p><p class="muted">${esc(err.message)}</p><button class="btn btn-primary" id="retry">Reintentar</button></div>`;
     $('#retry').addEventListener('click', () => location.reload());
   });

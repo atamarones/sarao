@@ -95,6 +95,7 @@ function schema_statements(string $driver): array
             id $pk,
             username VARCHAR(60) NOT NULL UNIQUE,
             password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(20) NOT NULL DEFAULT 'admin',
             created_at DATETIME NOT NULL,
             last_login_at DATETIME NULL
         )$tail",

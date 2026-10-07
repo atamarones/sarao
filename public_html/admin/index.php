@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
+require __DIR__ . '/../app/upgrade.php';
 
 if (!is_installed()) {
     header('Location: ../install.php');
@@ -30,6 +31,8 @@ if (!$admin && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!csrf_valid($_POST['csrf'] ?? null)) {
         $error = 'La página expiró. Vuelve a intentarlo.';
     } else {
+        // Aquí y no solo al cargar la carta: el operador nunca pide el estado de la carta.
+        run_upgrades($pdo, db_driver());
         $user = trim((string) ($_POST['username'] ?? ''));
         $pass = (string) ($_POST['password'] ?? '');
         $st = $pdo->prepare('SELECT id, password_hash FROM admins WHERE username = ?');
@@ -90,24 +93,28 @@ $v = static fn (string $f): int => (int) @filemtime(__DIR__ . '/assets/' . $f);
 </main>
 </body>
 <?php else: ?>
-<body class="app">
+<body class="app" data-role="<?= e($admin['role']) ?>">
 <header class="topbar">
   <a class="brand" href="./"><img src="../assets/img/logo-dark.webp" alt="El Sarao Pub" width="94" height="48"><span>Panel</span></a>
   <nav class="tabs" aria-label="Secciones">
+    <?php if ($admin['role'] !== ROLE_OPERATOR): ?>
     <a href="#productos" data-view="productos">Productos</a>
     <a href="#categorias" data-view="categorias">Categorías</a>
     <a href="#promos" data-view="promos">Promos</a>
     <a href="#testimonios" data-view="testimonios">Testimonios</a>
+    <?php endif; ?>
     <a href="#karaoke" data-view="karaoke">Karaoke</a>
     <a href="#operacion" data-view="operacion">Operación</a>
+    <?php if ($admin['role'] !== ROLE_OPERATOR): ?>
     <a href="#ajustes" data-view="ajustes">Ajustes</a>
+    <?php endif; ?>
   </nav>
   <div class="topbar-end">
     <a class="btn btn-ghost" href="../" target="_blank" rel="noopener">Ver sitio</a>
     <form method="post" action="logout.php"><input type="hidden" name="csrf" value="<?= e($csrf) ?>"><button class="btn btn-ghost">Salir</button></form>
   </div>
 </header>
-<main id="view" class="view" tabindex="-1"><p class="loading">Cargando la carta…</p></main>
+<main id="view" class="view" tabindex="-1"><p class="loading">Cargando…</p></main>
 <div class="toasts" role="status" aria-live="polite"></div>
 <script src="assets/admin.js?v=<?= $v('admin.js') ?>" defer></script>
 </body>

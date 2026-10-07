@@ -225,7 +225,11 @@ function state(): array
     }
     $s = public_settings(settings());
     $s['hours'] = hours_from_settings($s);
-    return ['categories' => $cats, 'products' => $prods, 'promotions' => $promos, 'testimonials' => $tests, 'settings' => $s, 'pos' => pos_status()];
+    $st = $pdo->prepare('SELECT password_hash FROM admins WHERE username = ? AND role = ?');
+    $st->execute([OPERATOR_USERNAME, ROLE_OPERATOR]);
+    $opHash = $st->fetchColumn();
+    $operator = ['username' => OPERATOR_USERNAME, 'exists' => $opHash !== false, 'has_password' => $opHash !== false && $opHash !== NO_PASSWORD];
+    return ['categories' => $cats, 'products' => $prods, 'promotions' => $promos, 'testimonials' => $tests, 'settings' => $s, 'pos' => pos_status(), 'operator' => $operator];
 }
 
 /** Estado del karaoke para el panel (se consulta cada pocos segundos en la pestaña Karaoke). */
@@ -331,6 +335,11 @@ if ($method !== 'GET') {
 }
 $aid = (int) $admin['id'];
 $pdo = db();
+
+// El operador solo usa las pestañas Karaoke y Operación (cuya guía sale de karaoke.help).
+if ($admin['role'] === ROLE_OPERATOR && !str_starts_with($action, 'karaoke.')) {
+    problem(403, 'Sin permiso', 'Tu cuenta solo puede usar Karaoke y Operación.');
+}
 
 try {
     switch ($method . ' ' . $action) {
@@ -659,6 +668,20 @@ try {
             session_regenerate_id(true);
             audit($aid, 'update', 'password');
             respond(['ok' => true]);
+
+        case 'POST operator.password':
+            // Solo un admin llega aquí: al operador lo frena la comprobación de rol de arriba.
+            $new = (string) (input()['new'] ?? '');
+            if (strlen($new) < 8) {
+                throw new ApiError('La contraseña del operador debe tener al menos 8 caracteres.', 422, ['new' => 'Mínimo 8 caracteres.']);
+            }
+            $st = $pdo->prepare('UPDATE admins SET password_hash = ? WHERE username = ? AND role = ?');
+            $st->execute([password_hash($new, PASSWORD_BCRYPT, ['cost' => 12]), OPERATOR_USERNAME, ROLE_OPERATOR]);
+            if (!$st->rowCount()) {
+                throw new ApiError('La cuenta del operador no existe. Recarga el panel.', 404);
+            }
+            audit($aid, 'update', 'operator_password');
+            respond(['ok' => true, 'state' => state()]);
 
         // ----- Karaoke por mesa -----
         case 'GET karaoke.help':
