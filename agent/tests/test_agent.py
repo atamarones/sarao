@@ -152,6 +152,21 @@ class KaraFunClientTests(unittest.TestCase):
         st = self.kf.remove_from_queue(0)
         self.assertEqual(len(st.queue), 0)
 
+    def test_status_pushed_while_playing_does_not_hide_the_new_song(self):
+        # Visto en el bar (2026-10-08): con algo sonando, los <status> empujados se apilaban y el agente
+        # leía la cola de minutos antes; la canción recién añadida «no aparecía» y la nube la daba por fallida.
+        self.fake.queue.append({"title": "Decimo Grado", "artist": "Ana & Jaime", "duration": 187.0,
+                                "singer": "Ana · M1·aaa", "playing": True})
+        self.kf.status()
+        self.fake.push_status(times=5)
+        time.sleep(0.3)  # que los empujes lleguen al socket antes de la orden
+        st = self.kf.add_to_queue(76237, "Luis · M2·bbb")
+        self.assertEqual([q.singer for q in st.queue], ["Ana · M1·aaa", "Luis · M2·bbb"])
+        self.fake.queue.pop(0)  # terminó la primera y KaraFun lo avisa varias veces
+        self.fake.push_status(times=5)
+        time.sleep(0.3)
+        self.assertEqual([q.singer for q in self.kf.status().queue], ["Luis · M2·bbb"])
+
     def test_reconnects_when_karafun_restarts_its_remote(self):
         self.fake.drop_next = 1
         res = self.kf.search("decimo")

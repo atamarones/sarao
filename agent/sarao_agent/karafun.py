@@ -1,7 +1,8 @@
 """Cliente del control remoto local de KaraFun Player 2 (WebSocket en 127.0.0.1:57570, mensajes XML).
 
 Comportamientos de KaraFun que este módulo absorbe (vistos en el PC del bar, 2026-10-06):
-- Al conectar, KaraFun emite un <status> sin que se lo pidan, y vuelve a emitirlo cada vez que algo cambia.
+- Al conectar, KaraFun emite un <status> sin que se lo pidan, y vuelve a emitirlo cada vez que algo cambia
+  (también mientras reproduce): antes de cada acción se vacía lo empujado, o se leería una cola vieja.
 - Las respuestas no llevan id: se reconocen por la etiqueta raíz (<list>, <catalogList>, <status>).
 - KaraFun reinicia su servidor de control cada cierto tiempo y corta la conexión a mitad de una orden:
   toda llamada reconecta y se reintenta una vez.
@@ -14,6 +15,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+import select
 import subprocess
 import threading
 import time
@@ -188,6 +190,31 @@ class KaraFunClient:
             if want(root.tag):
                 return root
 
+    def _drain(self) -> ET.Element | None:
+        """Lee, sin esperar, lo que KaraFun empujó mientras nadie leía el socket.
+
+        Mientras reproduce, KaraFun emite <status> por su cuenta; si no se consumen, se apilan y cada
+        llamada leería el más viejo de la pila en vez de la respuesta, con la cola de hace minutos.
+        Devuelve el último <status> leído (el más reciente), o None si no había ninguno.
+        """
+        ws = self._ws
+        assert ws is not None
+        newest = None
+        while ws.sock is not None and select.select([ws.sock], [], [], 0)[0]:
+            ws.settimeout(self.timeout_s)  # hay datos: se lee el mensaje completo
+            raw = ws.recv()
+            if not raw:
+                raise KaraFunError("KaraFun cerró la conexión")
+            try:
+                root = parse_xml(raw)
+            except ET.ParseError:
+                continue
+            if root.tag == "status":
+                self.last_status = parse_status(root)
+                self.last_status_at = time.monotonic()
+                newest = root
+        return newest
+
     def _call(self, message: str, want, timeout_s: float | None = None) -> ET.Element:
         """Envía una acción y espera la respuesta cuya raíz cumpla `want`. Reconecta y reintenta."""
         last_exc: Exception | None = None
@@ -195,8 +222,12 @@ class KaraFunClient:
             with self._lock:
                 try:
                     ws = self._connect()
+                    self._drain()  # lo viejo fuera: la respuesta que se lea será a esta acción
                     ws.send(message)
-                    return self._read_until(want, time.monotonic() + (timeout_s or self.timeout_s))
+                    root = self._read_until(want, time.monotonic() + (timeout_s or self.timeout_s))
+                    newer = self._drain()
+                    # Si tras la respuesta llegó otro <status>, ese es el estado vigente.
+                    return newer if newer is not None and root.tag == "status" else root
                 except (OSError, websocket.WebSocketException, KaraFunError) as exc:
                     last_exc = exc
                     log.warning("KaraFun: %s (intento %d)", exc, attempt + 1)
@@ -247,8 +278,18 @@ class KaraFunClient:
             st = self.status()
         return st
 
+    def _queue_len_now(self) -> int:
+        """Largo de la cola según el último <status>, tras consumir lo que KaraFun haya empujado."""
+        with self._lock:
+            try:
+                self._connect()
+                self._drain()
+            except (OSError, websocket.WebSocketException, KaraFunError):
+                self.close()  # _call reconecta
+            return len(self.last_status.queue) if self.last_status else -1
+
     def add_to_queue(self, song_id: int, singer: str, position: int = END_OF_QUEUE) -> Status:
-        before = len(self.last_status.queue) if self.last_status else -1
+        before = self._queue_len_now()
         msg = (f'<action type="addToQueue" song="{int(song_id)}" singer="{escape(clean_singer(singer))}">'
                f'{int(position)}</action>')
         return self._call_and_wait_status(msg, lambda st: len(st.queue) != before)
@@ -260,7 +301,7 @@ class KaraFunClient:
         return st
 
     def remove_from_queue(self, pos: int) -> Status:
-        before = len(self.last_status.queue) if self.last_status else -1
+        before = self._queue_len_now()
         msg = f'<action type="removeFromQueue" id="{int(pos)}"></action>'
         return self._call_and_wait_status(msg, lambda st: len(st.queue) != before)
 

@@ -124,6 +124,14 @@ class FakeKaraFun:
             return self.status_xml()
         return None
 
+    def push_status(self, times: int = 1) -> None:
+        """KaraFun empuja <status> sin que se lo pidan (lo hace sin parar mientras reproduce)."""
+        async def push():
+            for ws in list(self._clients):
+                for _ in range(times):
+                    await ws.send(self.status_xml())
+        asyncio.run_coroutine_threadsafe(push(), self._loop).result(5)
+
     # ------------------------------------------------------------ servidor
     async def _serve(self, ws):
         self._clients.add(ws)
