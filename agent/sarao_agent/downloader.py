@@ -103,7 +103,7 @@ class Downloader:
             log.error("yt-dlp no pudo consultar %s (%s): %s", youtube_id, proc.returncode, proc.stderr[-800:])
             err = proc.stderr.lower()
             if "not a bot" in err:
-                raise DownloadError("blocked", "YouTube bloqueó la descarga en el bar. Pide ayuda en la barra.")
+                raise DownloadError("blocked", "YouTube bloqueó la descarga automática (pide confirmar que no es un robot).")
             if "confirm your age" in err or "age-restricted" in err or "inappropriate for some users" in err:
                 raise DownloadError("restricted", "El video tiene restricción de edad.")
             if "private" in err or "unavailable" in err or "not available" in err or "removed" in err:

@@ -97,10 +97,12 @@ catálogo ───────────────────────�
 pedido ─┤                          en_espera ─► enviado ─► en_cola ─► cantando ─► cantada
         │                              ▲           │          │
 YouTube ─► descargando ─► descargado ──┘           │          └► retirado (quitado a mano en KaraFun)
-               │                                   │
-               └────────────► fallido ◄────────────┘   (con motivo, visible para la mesa y en el panel)
+               │  │                                │
+               │  └────────────► fallido ◄─────────┘   (con motivo, visible para la mesa y en el panel)
+               │                    ▲
+               └─► operador ────────┴──► puesta   (la descarga automática falló: el encargado la pone a mano)
 
-en cualquier estado antes de `enviado`: cancelado (por la mesa o el encargado)
+en cualquier estado antes de `enviado` (también `operador`): cancelado (por la mesa o el encargado)
 ```
 
 - Las transiciones solo las hace el servidor, en una transacción, con `UPDATE … WHERE status = <esperado>` (bloqueo optimista). Dos clics simultáneos no pueden mover un pedido dos veces.
@@ -161,6 +163,8 @@ KaraFun solo recibe un **buffer corto**: la canción que suena + las 2 siguiente
 3. El agente pulsa Actualizar, resuelve el id de KaraFun con `search` y el pedido pasa a `en_espera` como uno normal.
 4. El encargado depura `Por aprobar` cuando pueda (§9).
 
+**Si la descarga automática falla** por algo que no sea un rechazo definitivo (YouTube pide «confirma que no eres un robot», yt-dlp desactualizado, sin red, el agente nunca confirmó), el pedido pasa a `operador` en vez de `fallido`. El panel lo muestra arriba, en «Para el operador», con el enlace para copiar o abrir. El encargado baja el video, lo pone en KaraFun y pulsa **Ya la puse en KaraFun** (`puesta`, final: la nube ya no lo sigue en la cola porque no lleva marcador), o **No se pudo** con el motivo que verá la mesa (`fallido`). Los rechazos definitivos (`too_long`, `live`, `unavailable`, `bad_id`, `no_duration`) siguen yendo a `fallido` directo. Un pedido en `operador` cuenta como pendiente de la mesa y se puede cancelar, pero no ocupa turno en la lista de espera.
+
 Descargar de YouTube va contra sus términos de uso, y poner música en un local comercial puede requerir licencias distintas a la de KaraFun. Es una decisión del negocio; el sistema deja registro de cada descarga, de qué mesa la pidió y cuándo.
 
 ## 11. Seguridad y abuso
@@ -180,7 +184,7 @@ Descargar de YouTube va contra sus términos de uso, y poner música en un local
 | "Actualizar" no termina | El agente compara el índice antes y después; si no cambia en 2 min, avisa. | Panel: "KaraFun no pudo releer la carpeta". |
 | PC reiniciado | El agente arranca como servicio con Windows y reconcilia. | Nada, si KaraFun también arranca solo. |
 | Hostinger caído | El bar vuelve a la hojita y a KaraFun a mano. | La página de mesa muestra un aviso. |
-| Descarga falla | Pedido `fallido` con motivo (no existe, muy largo, error de red). | La mesa ve el motivo y puede pegar otro enlace. |
+| Descarga falla | Rechazo definitivo (no existe, muy largo, directo): `fallido` con motivo. Cualquier otro error: `operador`. | Fallido: la mesa ve el motivo y puede pegar otro enlace. Operador: el encargado lo baja y lo pone a mano. |
 | Encargado quita una canción en KaraFun | El pedido pasa a `retirado`. | La mesa lo ve en su lista. |
 
 Las horas siempre las pone el servidor (hora de Bogotá), nunca el celular ni el PC.

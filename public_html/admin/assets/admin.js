@@ -825,6 +825,7 @@
   const K_STATUS = {
     descargando: 'Descargando', descargado: 'Descargado', en_espera: 'En espera', enviado: 'Enviando a KaraFun',
     en_cola: 'En la cola de KaraFun', cantando: 'Sonando', cantada: 'Cantada', fallido: 'Fallido', retirado: 'Retirado', cancelado: 'Cancelado',
+    operador: 'Para el operador', puesta: 'Puesta a mano',
   };
   const kTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Bogota' }) : '');
   const agoText = (s) => (s == null ? 'nunca' : s < 60 ? `hace ${s} s` : s < 3600 ? `hace ${Math.round(s / 60)} min` : `hace ${Math.round(s / 3600)} h`);
@@ -852,6 +853,9 @@
     view.innerHTML = `
       <div class="view-head"><div><h1>Karaoke</h1><p class="muted">Pedidos desde el celular de cada mesa. Se actualiza solo cada 5 segundos.</p></div></div>
       <div class="k-alert alert alert-error" id="k-error" role="alert" hidden></div>
+      <section class="group k-manual" id="k-manual-wrap" hidden><h2 class="group-title">Para el operador <span class="count" id="k-manual-n">0</span></h2>
+        <p class="hint">YouTube no dejó bajar estos videos solos. Copia el enlace, bájalo, ponlo en KaraFun y márcalo aquí: la mesa ve el cambio.</p>
+        <ul class="rows" id="k-manual"></ul></section>
       <div class="k-grid" id="k-status"><p class="loading">Cargando el karaoke…</p></div>
       <section class="group"><h2 class="group-title">Ahora en KaraFun <span class="count" id="k-live-n">0</span></h2>
         <p class="hint">La que suena y las siguientes 2. Lo demás espera aquí y entra solo cuando hay espacio.</p>
@@ -944,6 +948,22 @@
     </li>`;
   }
 
+  function kManualRow(r) {
+    return `<li class="row k-row k-operador" data-rid="${esc(r.id)}">
+      <div class="row-main">
+        <p class="row-title k-title">${esc(r.title)}</p>
+        <p class="row-sub">${[r.table, `canta ${r.singer}`, `desde las ${kTime(r.updated_at)}`].map(esc).join(' · ')}</p>
+        <p class="k-link"><a class="link" href="${esc(r.youtube_url)}" target="_blank" rel="noopener">${esc(r.youtube_url)}</a></p>
+        ${r.error ? `<p class="hint">Por qué no se bajó sola: ${esc(r.error)}</p>` : ''}
+      </div>
+      <div class="row-actions k-manual-actions">
+        <button class="btn btn-ghost" type="button" data-act="copy-link" data-url="${esc(r.youtube_url)}">Copiar enlace</button>
+        <button class="btn btn-ghost" type="button" data-act="manual-fail">No se pudo</button>
+        <button class="btn btn-primary" type="button" data-act="placed">Ya la puse en KaraFun</button>
+      </div>
+    </li>`;
+  }
+
   function renderKaraokeLive() {
     if ((location.hash || '').slice(1) !== 'karaoke' || !$('#k-status')) return;
     const errBox = $('#k-error');
@@ -989,6 +1009,9 @@
     const csv = $('#k-csv');
     csv.addEventListener('change', () => importKarafun(csv));
 
+    $('#k-manual-wrap').hidden = !k.manual.length;
+    $('#k-manual-n').textContent = k.manual.length;
+    $('#k-manual').innerHTML = k.manual.map(kManualRow).join('');
     $('#k-live-n').textContent = k.in_karafun.length;
     $('#k-live').innerHTML = k.in_karafun.length ? k.in_karafun.map((r) => kRow(r, ['enviado', 'en_cola'].includes(r.status)
       ? `<button class="btn btn-ghost btn-sm" data-act="remove">Quitar de KaraFun</button>` : '')).join('')
@@ -1058,6 +1081,32 @@
     if (act === 'cancel') {
       if (!(await confirmDialog('¿Cancelar el pedido?', 'La mesa verá que el pedido se canceló.', 'Cancelar pedido'))) return;
       return run('karaoke.request.cancel', { id: rid }, 'Pedido cancelado');
+    }
+    if (act === 'copy-link') {
+      try { await navigator.clipboard.writeText(btn.dataset.url); toast('Enlace copiado'); } catch { toast('Selecciona el enlace y cópialo a mano', 'error'); }
+      return;
+    }
+    if (act === 'placed') return run('karaoke.request.placed', { id: rid }, 'Listo: la mesa la ve puesta en KaraFun');
+    if (act === 'manual-fail') {
+      const d = openModal(`<form class="modal-body stack" novalidate>
+        <header class="modal-head"><h2 class="modal-title">No se pudo poner</h2>
+          <button type="button" class="icon-btn" data-close title="Cerrar">${icon('x')}<span class="sr-only">Cerrar</span></button></header>
+        <p class="alert alert-error form-error" tabindex="-1" hidden></p>
+        <label>Motivo que verá la mesa<input name="reason" maxlength="120" required value="No pudimos conseguir ese video. Prueba con otro enlace."></label>
+        <footer class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Volver</button><button class="btn btn-danger" type="submit">Marcar como no se pudo</button></footer>
+      </form>`);
+      const form = $('form', d);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          kstate = (await withBusy($('[type="submit"]', form), () => api('karaoke.request.manual_fail', { id: rid, reason: form.elements.reason.value }))).karaoke;
+          d.dataset.dirty = '0';
+          d.close();
+          toast('La mesa verá el motivo');
+          renderKaraokeLive();
+        } catch (err) { showErrors(form, err); }
+      });
+      return;
     }
     if (act === 'remove') {
       if (!(await confirmDialog('¿Quitar de KaraFun?', 'El agente la quitará de la cola si aún no ha sonado.', 'Quitar'))) return;

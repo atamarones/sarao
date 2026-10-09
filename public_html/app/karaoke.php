@@ -10,7 +10,8 @@ declare(strict_types=1);
  *
  * Estados de un pedido (§6):
  *   descargando → descargado → en_espera → enviado → en_cola → cantando → cantada
- *   fallido, retirado y cancelado son finales. Toda transición es un UPDATE … WHERE status = <esperado>.
+ *   descargando → operador → puesta: la descarga automática falló y el personal la pone a mano en KaraFun.
+ *   fallido, retirado, cancelado y puesta son finales. Toda transición es un UPDATE … WHERE status = <esperado>.
  */
 
 const KARAOKE_BUFFER = 3;              // Entradas en la cola real de KaraFun: la que suena + 2.
@@ -26,12 +27,19 @@ const KARAOKE_NOT_SHOWN = 'KaraFun no mostró la canción en la cola. Pide ayuda
 const KARAOKE_SINGER_MAX = 30;
 const KARAOKE_AVG_SONG_S = 240;
 
-const KARAOKE_WAITING = ['descargando', 'descargado', 'en_espera'];
+// En turno: lo que el sistema llevará solo a KaraFun. Pendientes: además lo que espera al operador.
+const KARAOKE_QUEUED = ['descargando', 'descargado', 'en_espera'];
+const KARAOKE_WAITING = [...KARAOKE_QUEUED, 'operador'];
 const KARAOKE_IN_KARAFUN = ['enviado', 'en_cola', 'cantando'];
-const KARAOKE_FINAL = ['cantada', 'fallido', 'retirado', 'cancelado'];
+const KARAOKE_FINAL = ['cantada', 'fallido', 'retirado', 'cancelado', 'puesta'];
+// Rechazos de una descarga que el operador tampoco puede arreglar: el pedido falla de una vez.
+// Cualquier otro error (YouTube bloquea, sin conexión, yt-dlp roto…) pasa el pedido al operador.
+const KARAOKE_DOWNLOAD_REJECTED = ['too_long', 'live', 'unavailable', 'bad_id', 'no_duration'];
 
 const KARAOKE_TRANSITIONS = [
-    'descargando' => ['descargado', 'fallido', 'cancelado'],
+    'descargando' => ['descargado', 'operador', 'fallido', 'cancelado'],
+    // operador → puesta: el personal la bajó y la puso en KaraFun (sin marcador, la nube ya no la sigue).
+    'operador' => ['puesta', 'fallido', 'cancelado'],
     'descargado' => ['en_espera', 'fallido', 'cancelado'],
     'en_espera' => ['enviado', 'fallido', 'cancelado'],
     'enviado' => ['en_cola', 'cantando', 'fallido', 'retirado'],
@@ -321,6 +329,12 @@ function karaoke_youtube_oembed(string $id): array
 // ---------------------------------------------------------------------------
 // Máquina de estados.
 
+/** «?, ?, …» para un IN con una lista de estados. */
+function karaoke_marks(array $values): string
+{
+    return implode(', ', array_fill(0, count($values), '?'));
+}
+
 function karaoke_log(PDO $pdo, string $requestId, ?string $from, string $to, string $actor, ?string $note = null): void
 {
     $pdo->prepare('INSERT INTO karaoke_request_log (request_id, from_status, to_status, actor, note, at) VALUES (?, ?, ?, ?, ?, ?)')
@@ -461,7 +475,7 @@ function karaoke_night_close(PDO $pdo, string $reason = 'La noche de karaoke ter
         $ids = $pdo->query('SELECT id FROM karaoke_nights WHERE closes_at IS NULL')->fetchAll(PDO::FETCH_COLUMN);
         $cancelled = 0;
         foreach ($ids as $nid) {
-            $st = $pdo->prepare('SELECT id, status FROM karaoke_requests WHERE night_id = ? AND status IN (?, ?, ?)');
+            $st = $pdo->prepare('SELECT id, status FROM karaoke_requests WHERE night_id = ? AND status IN (' . karaoke_marks(KARAOKE_WAITING) . ')');
             $st->execute(array_merge([$nid], KARAOKE_WAITING));
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
                 $cancelled += (int) karaoke_transition($pdo, $r['id'], $r['status'], 'cancelado', 'sistema', $reason);
@@ -1167,7 +1181,7 @@ function karaoke_request_create(PDO $pdo, array $table, array $night, array $inp
     }
 
     $max = karaoke_setting_int($pdo, 'karaoke_max_pending');
-    $st = $pdo->prepare('SELECT COUNT(*) FROM karaoke_requests WHERE night_id = ? AND table_id = ? AND status IN (?, ?, ?)');
+    $st = $pdo->prepare('SELECT COUNT(*) FROM karaoke_requests WHERE night_id = ? AND table_id = ? AND status IN (' . karaoke_marks(KARAOKE_WAITING) . ')');
     $st->execute(array_merge([$night['id'], $table['id']], KARAOKE_WAITING));
     if ((int) $st->fetchColumn() >= $max) {
         throw new KaraokeError("Tu mesa ya tiene $max canciones esperando. Pide otra cuando suene una de las tuyas.", 429, 'too_many_pending', 'Espera tu turno');
@@ -1200,7 +1214,7 @@ function karaoke_request_create(PDO $pdo, array $table, array $night, array $inp
 
     $marker = karaoke_marker($table, $id);
     return karaoke_tx($pdo, static function () use ($pdo, $table, $night, $id, $singer, $song, $youtubeId, $download, $title, $marker, $clientKey): array {
-        $st = $pdo->prepare('SELECT COUNT(*) FROM karaoke_requests WHERE night_id = ? AND marker = ? AND status NOT IN (?, ?, ?, ?)');
+        $st = $pdo->prepare('SELECT COUNT(*) FROM karaoke_requests WHERE night_id = ? AND marker = ? AND status NOT IN (' . karaoke_marks(KARAOKE_FINAL) . ')');
         $st->execute(array_merge([$night['id'], $marker], KARAOKE_FINAL));
         if ((int) $st->fetchColumn() > 0) {
             // El celular genera otro uuid y reintenta: el marcador debe ser único entre los pedidos vivos.
@@ -1270,6 +1284,49 @@ function karaoke_request_cancel(PDO $pdo, string $id, string $actor, ?int $table
     return karaoke_request($pdo, $id);
 }
 
+/** El operador bajó el video a mano y lo puso en KaraFun. */
+function karaoke_request_placed(PDO $pdo, string $id): array
+{
+    $r = karaoke_request($pdo, $id);
+    if (!$r || $r['status'] !== 'operador') {
+        throw new KaraokeError('Ese pedido ya no espera al operador.', 409, 'not_manual');
+    }
+    if (!karaoke_transition($pdo, $id, 'operador', 'puesta', 'admin', 'Puesta en KaraFun por el personal.', ['error' => null])) {
+        throw new KaraokeError('El pedido cambió mientras tanto. Recarga e inténtalo de nuevo.', 409, 'conflict');
+    }
+    return karaoke_request($pdo, $id);
+}
+
+/** El operador tampoco pudo conseguir el video: el pedido falla con el motivo que verá la mesa. */
+function karaoke_request_manual_fail(PDO $pdo, string $id, string $reason): array
+{
+    $reason = trim(preg_replace('/\s+/u', ' ', $reason) ?? '');
+    if ($reason === '' || mb_strlen($reason) > 120) {
+        throw new KaraokeError('Escribe el motivo para la mesa (máximo 120 caracteres).', 422, 'bad_reason');
+    }
+    $r = karaoke_request($pdo, $id);
+    if (!$r || $r['status'] !== 'operador') {
+        throw new KaraokeError('Ese pedido ya no espera al operador.', 409, 'not_manual');
+    }
+    if (!karaoke_transition($pdo, $id, 'operador', 'fallido', 'admin', $reason)) {
+        throw new KaraokeError('El pedido cambió mientras tanto. Recarga e inténtalo de nuevo.', 409, 'conflict');
+    }
+    return karaoke_request($pdo, $id);
+}
+
+/** Pedidos de la noche que esperan al operador (la descarga automática falló), del más antiguo al más nuevo. */
+function karaoke_manual(PDO $pdo, int $nightId): array
+{
+    $st = $pdo->prepare("SELECT r.*, t.name AS table_name, d.title AS yt_title
+        FROM karaoke_requests r
+        JOIN karaoke_tables t ON t.id = r.table_id
+        LEFT JOIN karaoke_downloads d ON d.youtube_id = r.youtube_id
+        WHERE r.night_id = ? AND r.status = 'operador'
+        ORDER BY r.updated_at, r.id");
+    $st->execute([$nightId]);
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
 /** Quita de KaraFun una canción enviada o en cola (orden remove al agente). */
 function karaoke_request_remove(PDO $pdo, string $id): void
 {
@@ -1297,9 +1354,9 @@ function karaoke_waiting(PDO $pdo, int $nightId): array
         JOIN karaoke_tables t ON t.id = r.table_id
         LEFT JOIN karaoke_songs s ON s.id = r.song_id
         LEFT JOIN karaoke_downloads d ON d.youtube_id = r.youtube_id
-        WHERE r.night_id = ? AND r.status IN (?, ?, ?)
+        WHERE r.night_id = ? AND r.status IN (' . karaoke_marks(KARAOKE_QUEUED) . ')
         ORDER BY r.fair_seq, r.created_at, r.id');
-    $st->execute(array_merge([$nightId], KARAOKE_WAITING));
+    $st->execute(array_merge([$nightId], KARAOKE_QUEUED));
     return $st->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -1308,7 +1365,7 @@ function karaoke_request_move(PDO $pdo, string $id, int $dir): void
 {
     karaoke_tx($pdo, static function () use ($pdo, $id, $dir): void {
         $r = karaoke_request($pdo, $id);
-        if (!$r || !in_array($r['status'], KARAOKE_WAITING, true)) {
+        if (!$r || !in_array($r['status'], KARAOKE_QUEUED, true)) {
             throw new KaraokeError('Ese pedido ya no está en espera.', 409, 'not_waiting');
         }
         $list = karaoke_waiting($pdo, (int) $r['night_id']);
@@ -1386,8 +1443,11 @@ function karaoke_command(PDO $pdo, int $id): ?array
     return $st->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-/** Consecuencias de una orden que falló del todo: el pedido pasa a fallido con el motivo. */
-function karaoke_command_failed(PDO $pdo, array $cmd, string $message): void
+/**
+ * Consecuencias de una orden que falló del todo: el pedido pasa a fallido con el motivo. Una descarga
+ * que falló por algo que no sea un rechazo definitivo pasa al operador, que la baja y la pone a mano.
+ */
+function karaoke_command_failed(PDO $pdo, array $cmd, string $message, ?string $code = null): void
 {
     $payload = json_decode((string) $cmd['payload'], true) ?: [];
     if ($cmd['type'] === 'download') {
@@ -1396,8 +1456,11 @@ function karaoke_command_failed(PDO $pdo, array $cmd, string $message): void
             ->execute([mb_substr($message, 0, 255), karaoke_now(), $yt]);
         $st = $pdo->prepare("SELECT id FROM karaoke_requests WHERE youtube_id = ? AND status = 'descargando'");
         $st->execute([$yt]);
+        $manual = !in_array($code, KARAOKE_DOWNLOAD_REJECTED, true);
         foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $rid) {
-            karaoke_transition($pdo, $rid, 'descargando', 'fallido', 'agente', $message);
+            $manual
+                ? karaoke_transition($pdo, $rid, 'descargando', 'operador', 'agente', $message, ['error' => $message])
+                : karaoke_transition($pdo, $rid, 'descargando', 'fallido', 'agente', $message);
         }
     } elseif ($cmd['type'] === 'enqueue' && $cmd['request_id']) {
         karaoke_transition($pdo, $cmd['request_id'], 'enviado', 'fallido', 'agente', $message);
@@ -1520,7 +1583,7 @@ function karaoke_agent_ack(PDO $pdo, array $body): array
             $up = $pdo->prepare("UPDATE karaoke_commands SET status = 'failed', error = ?, updated_at = ?, done_at = ? WHERE id = ? AND status IN ('pending', 'leased')");
             $up->execute([$errJson, $now, $now, $id]);
             if ($up->rowCount() === 1) {
-                karaoke_command_failed($pdo, $cmd, $message);
+                karaoke_command_failed($pdo, $cmd, $message, $code);
             }
             return ['ok' => true, 'command_id' => $id, 'status' => 'failed'];
         });

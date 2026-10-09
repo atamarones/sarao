@@ -14,6 +14,7 @@
   const POLL_MS = 8000;
   const STATUS = {
     descargando: ['Descargando el video', 'wait'],
+    operador: ['El personal la está preparando', 'wait'],
     descargado: ['Video listo', 'wait'],
     en_espera: ['En espera', 'wait'],
     enviado: ['Pasando a KaraFun', 'next'],
@@ -23,6 +24,7 @@
     fallido: ['No se pudo', 'bad'],
     retirado: ['Quitada de la cola', 'bad'],
     cancelado: ['Cancelada', 'done'],
+    puesta: ['Puesta en KaraFun por el personal', 'done'],
   };
 
   const store = {
@@ -299,7 +301,7 @@
 
   function renderOrders(list) {
     const ul = $('#orders');
-    const active = list.filter((r) => !['cantada', 'cancelado', 'fallido', 'retirado'].includes(r.status));
+    const active = list.filter((r) => !['cantada', 'cancelado', 'fallido', 'retirado', 'puesta'].includes(r.status));
     const count = $('#kk-count');
     count.textContent = active.length;
     count.hidden = !active.length;

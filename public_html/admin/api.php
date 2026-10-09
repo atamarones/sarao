@@ -255,6 +255,7 @@ function karaoke_state(): array
         'artist' => $r['artist'] ?? null,
         'source' => $r['source'] ?? null,
         'youtube_id' => $r['youtube_id'],
+        'youtube_url' => $r['youtube_id'] ? 'https://www.youtube.com/watch?v=' . $r['youtube_id'] : null,
         'error' => $r['error'],
         'queue_pos' => $r['kf_queue_pos'] === null ? null : (int) $r['kf_queue_pos'],
         'created_at' => karaoke_iso($r['created_at']),
@@ -264,6 +265,7 @@ function karaoke_state(): array
         JOIN karaoke_tables t ON t.id = r.table_id LEFT JOIN karaoke_songs s ON s.id = r.song_id LEFT JOIN karaoke_downloads d ON d.youtube_id = r.youtube_id';
     $inKf = $pdo->query("$select WHERE r.status IN ('enviado', 'en_cola', 'cantando') ORDER BY COALESCE(r.kf_queue_pos, 99), r.sent_at")->fetchAll();
     $waiting = $night ? karaoke_waiting($pdo, (int) $night['id']) : [];
+    $manual = $night ? karaoke_manual($pdo, (int) $night['id']) : [];
     $failed = [];
     if ($night) {
         $st = $pdo->prepare("$select WHERE r.night_id = ? AND r.status IN ('fallido', 'retirado') ORDER BY r.updated_at DESC LIMIT 30");
@@ -282,6 +284,7 @@ function karaoke_state(): array
         'tables' => $tables,
         'in_karafun' => array_map($row, $inKf),
         'waiting' => array_map($row, $waiting),
+        'manual' => array_map($row, $manual),
         'failed' => array_map($row, $failed),
         'agent' => karaoke_agent_status($pdo),
         'catalog' => [
@@ -727,6 +730,16 @@ try {
         case 'POST karaoke.request.cancel':
             karaoke_request_cancel($pdo, request_id_field(), 'admin');
             audit($aid, 'cancel', 'karaoke_request');
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.request.placed':
+            karaoke_request_placed($pdo, request_id_field());
+            audit($aid, 'placed', 'karaoke_request');
+            respond(['ok' => true, 'karaoke' => karaoke_state()]);
+
+        case 'POST karaoke.request.manual_fail':
+            karaoke_request_manual_fail($pdo, request_id_field(), (string) str_field('reason', 120, true, 'el motivo para la mesa'));
+            audit($aid, 'manual_fail', 'karaoke_request');
             respond(['ok' => true, 'karaoke' => karaoke_state()]);
 
         case 'POST karaoke.request.move':

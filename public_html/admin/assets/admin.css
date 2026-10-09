@@ -272,6 +272,11 @@ legend { padding: 0 6px; font-size: 13px; color: var(--muted); }
 .k-title { font-weight: 600; overflow-wrap: anywhere; }
 .k-cantando { border-color: rgba(248, 184, 0, .5); }
 .k-err { color: var(--danger); font-size: 13px; margin-top: 2px; }
+.k-operador { border-color: rgba(248, 184, 0, .5); }
+.k-operador .row-sub { white-space: normal; }
+.k-link { font-size: 14px; margin-top: 4px; overflow-wrap: anywhere; }
+.k-manual-actions { gap: 8px; }
+.k-manual-actions .btn { min-height: 44px; }
 .k-add-row { display: grid; gap: 12px; align-items: end; }
 .k-three { display: grid; gap: 14px; }
 .k-token-out { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: rgba(248, 184, 0, .08); border: 1px solid rgba(248, 184, 0, .35); }

@@ -643,7 +643,7 @@ eq($y2['status'], 'descargando', 'segunda mesa con el mismo video: espera la mis
 eq($checks, 1, 'oEmbed solo para la primera');
 $dl = poll($pdo, [])['commands'];
 eq(array_column($dl, 'type'), ['download'], 'una sola orden download');
-eq($dl[0]['payload'], ['request_id' => $y1['id'], 'youtube_id' => 'dQw4w9WgXcQ', 'max_duration_s' => 480], 'payload download según el contrato');
+eq($dl[0]['payload'], ['request_id' => $y1['id'], 'youtube_id' => 'dQw4w9WgXcQ', 'max_duration_s' => 600], 'payload download según el contrato');
 throws(static fn () => karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $dl[0]['id'], 'ok' => true, 'result' => ['youtube_id' => 'dQw4w9WgXcQ']]), 'bad_song', 'ack de descarga sin canción: 422 y la orden sigue pendiente');
 $ytSong = song('Rick Astley', 'Never Gonna Give You Up', 213, 'Por aprobar');
 karaoke_agent_dispatch($pdo, 'song.upsert', ['song' => $ytSong]);
@@ -673,6 +673,59 @@ eq(karaoke_download($pdo, 'bbbbbbbbbbb')['status'], 'failed', 'descarga marcada 
 $y5 = karaoke_request_create($pdo, $t2, $night, ['id' => uuid(), 'singer' => 'Beto', 'youtube_url' => 'https://youtu.be/bbbbbbbbbbb'], static fn () => ['exists' => true, 'title' => null]);
 eq($y5['status'], 'descargando', 'pedir de nuevo un video fallido reintenta la descarga');
 eq(karaoke_download($pdo, 'bbbbbbbbbbb')['status'], 'downloading', 'descarga reactivada');
+
+// Si YouTube no deja bajarla sola (2026-10-08: «no eres un robot»), el pedido pasa al operador, no a fallido.
+$dl = array_values(array_filter(poll($pdo, [])['commands'], static fn ($c) => $c['type'] === 'download'));
+eq(array_column(array_column($dl, 'payload'), 'youtube_id'), ['bbbbbbbbbbb'], 'la descarga reactivada se entrega');
+karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $dl[0]['id'], 'ok' => false, 'error' => ['code' => 'blocked', 'message' => 'YouTube bloqueó la descarga en el bar.']]);
+eq(status_of($pdo, $y5['id']), 'operador', 'descarga bloqueada: pasa al operador');
+eq(karaoke_request($pdo, $y5['id'])['error'], 'YouTube bloqueó la descarga en el bar.', 'con el motivo para el operador');
+eq(array_column(karaoke_manual($pdo, (int) $night['id']), 'id'), [$y5['id']], 'aparece en la lista del operador');
+check(!in_array($y5['id'], array_column(karaoke_waiting($pdo, (int) $night['id']), 'id'), true), 'no ocupa turno en la lista de espera');
+$mine = array_values(array_filter(karaoke_table_requests($pdo, (int) $night['id'], (int) $t2['id']), static fn ($r) => $r['id'] === $y5['id']))[0];
+eq([$mine['status'], $mine['cancellable'], $mine['turn']], ['operador', true, null], 'la mesa la ve pendiente, cancelable y sin turno estimado');
+throws(static fn () => karaoke_request_move($pdo, $y5['id'], -1), 'not_waiting', 'no se reordena en la lista de espera');
+karaoke_request_placed($pdo, $y5['id']);
+eq(status_of($pdo, $y5['id']), 'puesta', '«Ya la puse en KaraFun»: puesta');
+eq(karaoke_request($pdo, $y5['id'])['error'], null, 'sin motivo de error');
+eq(karaoke_manual($pdo, (int) $night['id']), [], 'sale de la lista del operador');
+throws(static fn () => karaoke_request_placed($pdo, $y5['id']), 'not_manual', 'dos clics no la mueven dos veces');
+throws(static fn () => karaoke_request_cancel($pdo, $y5['id'], 'mesa', (int) $t2['id']), 'not_cancellable', 'puesta ya no se cancela');
+
+// Un error sin código (o el lease agotado) también va al operador; los rechazos definitivos no.
+karaoke_clock(karaoke_clock() + 61);
+$y6 = karaoke_request_create($pdo, $t1, $night, ['id' => uuid(), 'singer' => 'Ana', 'youtube_url' => 'https://youtu.be/eeeeeeeeeee'], static fn () => ['exists' => true, 'title' => 'Algo']);
+$dl = array_values(array_filter(poll($pdo, [])['commands'], static fn ($c) => $c['type'] === 'download'));
+karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $dl[0]['id'], 'ok' => false]);
+eq(status_of($pdo, $y6['id']), 'operador', 'error sin código: al operador');
+throws(static fn () => karaoke_request_manual_fail($pdo, $y6['id'], '   '), 'bad_reason', '«No se pudo» exige el motivo');
+throws(static fn () => karaoke_request_manual_fail($pdo, $y6['id'], str_repeat('x', 121)), 'bad_reason', 'motivo de máximo 120 caracteres');
+karaoke_request_manual_fail($pdo, $y6['id'], 'No pudimos conseguir ese video.');
+eq([status_of($pdo, $y6['id']), karaoke_request($pdo, $y6['id'])['error']], ['fallido', 'No pudimos conseguir ese video.'], '«No se pudo»: fallido con el motivo para la mesa');
+foreach (['too_long', 'live', 'unavailable'] as $i => $code) {
+    karaoke_clock(karaoke_clock() + 61);
+    $yr = karaoke_request_create($pdo, $t1, $night, ['id' => uuid(), 'singer' => 'Ana', 'youtube_url' => 'https://youtu.be/fffffffff0' . $i], static fn () => ['exists' => true, 'title' => null]);
+    $dl = array_values(array_filter(poll($pdo, [])['commands'], static fn ($c) => $c['type'] === 'download'));
+    karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $dl[0]['id'], 'ok' => false, 'error' => ['code' => $code, 'message' => 'No.']]);
+    eq(status_of($pdo, $yr['id']), 'fallido', "rechazo $code: fallido directo, sin pasar por el operador");
+}
+karaoke_clock(karaoke_clock() + 61);
+$y7 = karaoke_request_create($pdo, $t1, $night, ['id' => uuid(), 'singer' => 'Ana', 'youtube_url' => 'https://youtu.be/ggggggggggg'], static fn () => ['exists' => true, 'title' => null]);
+$dl = array_values(array_filter(poll($pdo, [])['commands'], static fn ($c) => $c['type'] === 'download'));
+for ($i = 0; $i < KARAOKE_MAX_ATTEMPTS; $i++) {
+    karaoke_clock(karaoke_clock() + KARAOKE_LEASE_S + 1);
+    poll($pdo, []);
+}
+eq(status_of($pdo, $y7['id']), 'operador', 'el agente nunca confirmó la descarga: al operador');
+karaoke_clock(karaoke_clock() + 61);
+$y8 = karaoke_request_create($pdo, $t2, $night, ['id' => uuid(), 'singer' => 'Beto', 'youtube_url' => 'https://youtu.be/hhhhhhhhhhh'], static fn () => ['exists' => true, 'title' => null]);
+$dl = array_values(array_filter(poll($pdo, [])['commands'], static fn ($c) => $c['type'] === 'download' && $c['payload']['youtube_id'] === 'hhhhhhhhhhh'));
+karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $dl[0]['id'], 'ok' => false, 'error' => ['code' => 'blocked', 'message' => 'x']]);
+eq(status_of($pdo, $y8['id']), 'operador', 'otra para el operador');
+karaoke_request_cancel($pdo, $y8['id'], 'mesa', (int) $t2['id']);
+eq(status_of($pdo, $y8['id']), 'cancelado', 'la mesa puede cancelar lo que espera al operador');
+karaoke_night_close($pdo);
+eq(status_of($pdo, $y7['id']), 'cancelado', 'cerrar la noche cancela lo que esperaba al operador');
 
 // ---------------------------------------------------------------------------
 section('Catálogo por lotes con commit (§9)');
