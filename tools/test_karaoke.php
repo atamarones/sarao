@@ -357,7 +357,7 @@ eq(count($out['commands']), 3, 'cola vacía: 3 órdenes enqueue');
 eq(array_column($out['commands'], 'type'), ['enqueue', 'enqueue', 'enqueue'], 'tipo enqueue');
 $c0 = $out['commands'][0];
 eq($c0['payload']['request_id'], $ids[0], 'la primera orden es el primer turno');
-eq($c0['payload']['song'], ['natural_key' => 'juanes|a dios le pido', 'source' => 'local', 'kf_id' => null, 'title' => 'A Dios le pido', 'artist' => 'Juanes', 'duration_s' => 215, 'file' => 'A/Juanes - A Dios le pido.mp4'], 'payload.song con file para que el agente la añada por ruta si hace falta');
+eq($c0['payload']['song'], ['natural_key' => 'juanes|a dios le pido', 'source' => 'local', 'kf_id' => null, 'title' => 'A Dios le pido', 'artist' => 'Juanes', 'duration_s' => 215, 'file' => 'A/Juanes - A Dios le pido.mp4', 'youtube_id' => null], 'payload.song con file para que el agente la añada por ruta si hace falta');
 eq($c0['payload']['singer'], 'Ana · ' . karaoke_request($pdo, $ids[0])['marker'], 'payload.singer con marcador');
 check((bool) preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d-05:00$/', $c0['lease_until']), 'lease_until en ISO 8601 con zona de Bogotá');
 eq(status_of($pdo, $ids[0]), 'enviado', 'pedido enviado');
@@ -618,7 +618,7 @@ karaoke_request_remove($pdo, $r2);
 karaoke_request_remove($pdo, $r2);
 $rm = poll($pdo, [entry($pdo, $r1, 0, 'playing'), entry($pdo, $r2, 1)])['commands'];
 eq(array_column($rm, 'type'), ['remove'], 'una sola orden remove aunque se pulse dos veces');
-eq($rm[0]['payload'], ['request_id' => $r2, 'singer' => karaoke_singer_label(karaoke_request($pdo, $r2)), 'song' => ['natural_key' => 'carlos vives|la gota fria', 'source' => 'local', 'kf_id' => null, 'title' => 'La gota fría', 'artist' => 'Carlos Vives', 'duration_s' => 200, 'file' => 'A/Carlos Vives - La gota fría.mp4']], 'payload remove según el contrato (con song)');
+eq($rm[0]['payload'], ['request_id' => $r2, 'singer' => karaoke_singer_label(karaoke_request($pdo, $r2)), 'song' => ['natural_key' => 'carlos vives|la gota fria', 'source' => 'local', 'kf_id' => null, 'title' => 'La gota fría', 'artist' => 'Carlos Vives', 'duration_s' => 200, 'file' => 'A/Carlos Vives - La gota fría.mp4', 'youtube_id' => null]], 'payload remove según el contrato (con song)');
 karaoke_agent_dispatch($pdo, 'ack', ['command_id' => $rm[0]['id'], 'ok' => true, 'result' => ['removed' => true]]);
 eq(status_of($pdo, $r2), 'retirado', 'remove confirmado: retirado');
 
@@ -654,6 +654,9 @@ $log->execute([$y1['id']]);
 eq($log->fetchAll(PDO::FETCH_COLUMN), ['descargando', 'descargado', 'en_espera'], 'pasa por descargado');
 eq(karaoke_count_por_aprobar($pdo), 1, 'una canción en Por aprobar');
 eq(karaoke_search($pdo, 'never gonna')[0]['from_youtube'], true, 'la búsqueda la marca como de YouTube');
+// Sin youtube_id en el enqueue, el agente no encuentra el archivo recién bajado (2026-10-08: «ya no está en el PC»).
+$enqY = array_values(array_filter(poll($pdo, [])['commands'], static fn ($c) => $c['type'] === 'enqueue' && $c['payload']['request_id'] === $y1['id']));
+eq($enqY[0]['payload']['song']['youtube_id'] ?? null, 'dQw4w9WgXcQ', 'el enqueue de una descarga lleva su youtube_id');
 $checks = 0;
 $y3 = karaoke_request_create($pdo, $t1, $night, ['id' => uuid(), 'singer' => 'Ana', 'youtube_url' => $yt], $oembed);
 eq($y3['status'], 'en_espera', 'un video ya descargado no se vuelve a bajar');
@@ -788,7 +791,7 @@ eq(array_column(karaoke_search($pdo, 'killers'), 'artist'), ['The Killers'], 'po
 $sidKf = karaoke_search($pdo, 'brightside')[0]['id'];
 req($pdo, $t1, $night, ['song_id' => $sidKf]);
 $cmd = poll($pdo, [])['commands'][0];
-eq($cmd['payload']['song'], ['natural_key' => 'kf:5632', 'source' => 'karafun', 'kf_id' => 5632, 'title' => 'Mr. Brightside', 'artist' => 'The Killers', 'duration_s' => 0, 'file' => null], 'enqueue de KaraFun en línea con source y kf_id, sin file');
+eq($cmd['payload']['song'], ['natural_key' => 'kf:5632', 'source' => 'karafun', 'kf_id' => 5632, 'title' => 'Mr. Brightside', 'artist' => 'The Killers', 'duration_s' => 0, 'file' => null, 'youtube_id' => null], 'enqueue de KaraFun en línea con source y kf_id, sin file');
 // Reimportar sin una canción: available = 0; renombrar: se reindexa.
 karaoke_clock(karaoke_clock() + 10);
 file_put_contents($csv, implode("\n", [

@@ -1756,6 +1756,8 @@ function karaoke_enqueue_song(array $r): array
         'duration_s' => (int) $r['duration_s'],
         // Ruta relativa a Música\Karaoke: el agente la usa si KaraFun no la encuentra por nombre.
         'file' => $r['source'] === 'local' ? ($r['file'] ?? null) : null,
+        // Descarga de YouTube que KaraFun aún no indexó: el agente busca su archivo por este id (contrato v2).
+        'youtube_id' => $r['youtube_id'] ?? null,
     ];
 }
 
