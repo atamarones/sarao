@@ -22,6 +22,7 @@ const KARAOKE_MAX_VIDEO_S = 480;
 const KARAOKE_CHUNK_MAX = 500;
 const KARAOKE_NIGHT_MAX_H = 14;        // Una noche abierta caduca sola: el código no sirve al día siguiente.
 const KARAOKE_SENT_TIMEOUT_S = 90;     // Enviado y confirmado, pero KaraFun nunca lo mostró en la cola.
+const KARAOKE_NOT_SHOWN = 'KaraFun no mostró la canción en la cola. Pide ayuda en la barra.';
 const KARAOKE_SINGER_MAX = 30;
 const KARAOKE_AVG_SONG_S = 240;
 
@@ -37,6 +38,8 @@ const KARAOKE_TRANSITIONS = [
     // en_cola/cantando → enviado: solo cuando KaraFun se reinicia y la nube los vuelve a enviar.
     'en_cola' => ['cantando', 'cantada', 'retirado', 'enviado'],
     'cantando' => ['cantada', 'enviado'],
+    // fallido → en_cola/cantando: solo el fallido por KARAOKE_NOT_SHOWN que KaraFun sí muestra después.
+    'fallido' => ['en_cola', 'cantando'],
 ];
 
 const KARAOKE_DEFAULTS = [
@@ -1653,6 +1656,7 @@ function karaoke_reconcile(PDO $pdo, array $prevQueue, array $queue): void
             }
         }
         if ($e !== null) {
+            unset($byMarker[$r['marker']]);
             $to = $e['status'] === 'playing' ? 'cantando' : 'en_cola';
             if ($r['status'] !== $to && in_array($to, KARAOKE_TRANSITIONS[$r['status']], true)) {
                 karaoke_transition($pdo, $r['id'], $r['status'], $to, 'agente', null, ['kf_queue_pos' => $e['pos']]);
@@ -1677,7 +1681,24 @@ function karaoke_reconcile(PDO $pdo, array $prevQueue, array $queue): void
                 ? karaoke_transition($pdo, $r['id'], 'en_cola', 'retirado', 'agente', 'Quitada de la cola de KaraFun.')
                 : karaoke_transition($pdo, $r['id'], 'en_cola', 'cantada', 'agente');
         } elseif ($r['status'] === 'enviado' && $r['acked_at'] !== null && $r['acked_at'] < karaoke_now(-KARAOKE_SENT_TIMEOUT_S)) {
-            karaoke_transition($pdo, $r['id'], 'enviado', 'fallido', 'sistema', 'KaraFun no mostró la canción en la cola. Pide ayuda en la barra.');
+            karaoke_transition($pdo, $r['id'], 'enviado', 'fallido', 'sistema', KARAOKE_NOT_SHOWN);
+        }
+    }
+    // Un fallido por no aparecer a tiempo que KaraFun sí muestra después (la cola llegó con retraso) vuelve:
+    // está sonando o por sonar, y darlo por fallido hace que la mesa lo pida otra vez. Solo los de esta noche
+    // y solo si ningún pedido vivo usa ya ese marcador (los vivos se emparejaron arriba y salieron de $byMarker).
+    $night = karaoke_current_night($pdo);
+    if ($byMarker && $night) {
+        $st = $pdo->prepare("SELECT id, marker FROM karaoke_requests WHERE night_id = ? AND status = 'fallido' AND error = ? ORDER BY updated_at DESC");
+        $st->execute([$night['id'], KARAOKE_NOT_SHOWN]);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $e = $byMarker[$r['marker']] ?? null;
+            if ($e === null) {
+                continue;
+            }
+            unset($byMarker[$r['marker']]);
+            karaoke_transition($pdo, $r['id'], 'fallido', $e['status'] === 'playing' ? 'cantando' : 'en_cola', 'agente',
+                'KaraFun sí la tenía en la cola.', ['error' => null, 'kf_queue_pos' => $e['pos']]);
         }
     }
 }

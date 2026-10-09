@@ -407,6 +407,13 @@ karaoke_clock(karaoke_clock() + 10);
 $out = poll($pdo, [entry($pdo, $ids[1], 0, 'playing'), entry($pdo, $ids[3], 1)]);
 eq(status_of($pdo, $ids[4]), 'fallido', 'enviado que nunca aparece en KaraFun termina en fallido con motivo');
 eq(array_column(array_column($out['commands'], 'payload'), 'request_id'), [$ids[5]], 'y su hueco pasa al siguiente');
+// La cola llegó con retraso (2026-10-08): KaraFun sí la tenía. El fallido vuelve, sin motivo de error.
+poll($pdo, [entry($pdo, $ids[1], 0, 'playing'), entry($pdo, $ids[3], 1), entry($pdo, $ids[4], 2)]);
+eq(status_of($pdo, $ids[4]), 'en_cola', 'fallido por no aparecer vuelve a en_cola si KaraFun lo muestra después');
+eq(karaoke_request($pdo, $ids[4])['error'], null, 'y pierde el motivo de error');
+eq((int) karaoke_request($pdo, $ids[4])['kf_queue_pos'], 2, 'con su posición real');
+poll($pdo, [entry($pdo, $ids[4], 0, 'playing')]);
+eq(status_of($pdo, $ids[4]), 'cantando', 'y sigue el ciclo normal');
 
 // ---------------------------------------------------------------------------
 section('Outbox: lease de 30 s, reentrega y máximo 5 intentos');
