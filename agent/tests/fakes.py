@@ -131,9 +131,12 @@ class FakeKaraFun:
         """KaraFun empuja <status> sin que se lo pidan (lo hace sin parar mientras reproduce)."""
         async def push():
             for ws in list(self._clients):
-                for _ in range(times):
-                    await ws.send(self.status_xml())
-        asyncio.run_coroutine_threadsafe(push(), self._loop).result(5)
+                try:  # conexiones de pruebas anteriores pueden estar cerrándose: se saltan
+                    for _ in range(times):
+                        await asyncio.wait_for(ws.send(self.status_xml()), 0.5)
+                except (websockets.ConnectionClosed, asyncio.TimeoutError):
+                    self._clients.discard(ws)
+        asyncio.run_coroutine_threadsafe(push(), self._loop).result(10)
 
     # ------------------------------------------------------------ servidor
     async def _serve(self, ws):
