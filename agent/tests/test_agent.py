@@ -258,6 +258,15 @@ class AgentTests(unittest.TestCase):
         self.assertTrue(self.run_until(lambda: self.acks_for(2)))
         self.assertEqual(self.kf_fake.queue[0]["title"], "Caballero")
 
+    def test_enqueue_not_visible_reports_no_position(self):
+        # Antes se respondía «última posición» aunque la canción no estuviera: el ack mentía.
+        self.kf_fake.ignore_adds = True
+        song = {"natural_key": "kf:76237", "source": "karafun", "kf_id": 76237, "title": "Caballero",
+                "artist": "Alejandro Fernández"}
+        self.cloud.add_command(16, "enqueue", self.enqueue_payload(song))
+        self.assertTrue(self.run_until(lambda: self.acks_for(16)))
+        self.assertEqual(self.acks_for(16)[0]["result"], {"queue_pos": None, "singer_shown": True})
+
     def test_enqueue_missing_song_fails_without_retry(self):
         song = {"natural_key": "nadie|nada", "source": "local", "title": "Nada", "artist": "Nadie"}
         self.cloud.add_command(3, "enqueue", self.enqueue_payload(song))

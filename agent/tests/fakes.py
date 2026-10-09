@@ -52,6 +52,7 @@ class FakeKaraFun:
         self.files: dict[str, tuple[str, str]] = {}  # ruta → (título, artista) de archivos añadidos por ruta
         self.queue: list[dict] = []
         self.received: list[str] = []
+        self.ignore_adds = False  # addToQueue responde pero no añade nada
         self.drop_next = 0  # cuántas órdenes siguientes se cortan sin responder (reinicio del control remoto)
         self._clients: set = set()
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -110,6 +111,8 @@ class FakeKaraFun:
         if typ == "addToQueue":
             sid = int(attr("song"))
             t, a, d = next((t, a, d) for s, t, a, d in self.all_songs() if s == sid)
+            if self.ignore_adds:
+                return self.status_xml()
             self.queue.append({"title": t, "artist": a, "duration": d, "singer": html.unescape(attr("singer") or "")})
             return self.status_xml()
         if typ == "clearQueue":

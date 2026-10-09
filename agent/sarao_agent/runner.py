@@ -336,7 +336,14 @@ class Agent:
                 item = st.queue[-1]
                 return {"queue_pos": item.pos, "singer_shown": False}
         item = self._find_in_queue(st, payload)
-        return {"queue_pos": item.pos if item else len(st.queue) - 1, "singer_shown": True}
+        if item is None:
+            # El <status> de la respuesta no la trae: se pregunta otra vez antes de dar una posición.
+            item = self._find_in_queue(self.kf.status(), payload)
+        if item is None:
+            # Sin inventar posición: la nube decide con la cola real que llega en el latido.
+            log.warning("KaraFun aceptó «%s» (%s) pero no aparece en su cola", song.get("title"), singer)
+            return {"queue_pos": None, "singer_shown": True}
+        return {"queue_pos": item.pos, "singer_shown": True}
 
     def do_remove(self, payload: dict) -> dict:
         st = self.kf.status()
