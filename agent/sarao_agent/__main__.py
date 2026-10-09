@@ -52,6 +52,14 @@ def check(cfg) -> int:
     except (OSError, subprocess.TimeoutExpired) as exc:
         ok = False
         print(f"[!!] yt-dlp no disponible: {exc}")
+    # Sin un runtime de JS, yt-dlp no resuelve el desafío de YouTube y ningún video trae formatos.
+    import shutil
+    js = next((n for n in ("deno", "node", "bun") if shutil.which(n)), None)
+    if js:
+        print(f"[ok] runtime de JS para yt-dlp: {js}")
+    else:
+        ok = False
+        print("[!!] falta un runtime de JS para yt-dlp: winget install DenoLand.Deno")
     try:
         CloudClient(cfg.cloud_url, cfg.token).call("poll", {"agent_version": __version__, "karafun": {},
                                                            "working": [], "acks_pending": 0, "check": True})

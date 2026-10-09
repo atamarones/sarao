@@ -156,7 +156,7 @@ KaraFun solo recibe un **buffer corto**: la canción que suena + las 2 siguiente
 
 **Descarga y encolado automáticos** (sin aprobación):
 
-1. Orden `download` al agente con el id. El agente consulta los metadatos con `yt-dlp` antes de bajar: rechaza directos y videos de más de 8 min (`fallido` con motivo).
+1. Orden `download` al agente con el id. El agente consulta los metadatos con `yt-dlp` antes de bajar: rechaza directos y videos de más de 10 min (`fallido` con motivo).
 2. Descarga mp4 ≤ 720p a `Música\Karaoke\Por aprobar\`, nombre `Artista - Título [id].mp4`. Si ese id ya se descargó antes (tabla de descargas en la nube), no se repite: se usa la canción existente.
 3. El agente pulsa Actualizar, resuelve el id de KaraFun con `search` y el pedido pasa a `en_espera` como uno normal.
 4. El encargado depura `Por aprobar` cuando pueda (§9).

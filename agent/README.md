@@ -6,7 +6,7 @@ Programa que corre en el PC del karaoke y conecta los pedidos de las mesas (nube
 
 - **Cada 2 s** avisa a la nube que está vivo, le manda la cola real de KaraFun y recoge órdenes.
 - **Encola** canciones en KaraFun con el nombre del cantante (canciones locales y del catálogo en línea).
-- **Descarga** los enlaces de YouTube que piden las mesas (máx. 8 min, mp4 ≤ 720p) a `Música\Karaoke\Por aprobar\Artista - Título [id].mp4` y los mete en la cola por ruta de archivo, sin esperar a que KaraFun los indexe (en ese caso entran **sin nombre de cantante**).
+- **Descarga** los enlaces de YouTube que piden las mesas (máx. 10 min, mp4; hoy YouTube solo entrega hasta 360p sin iniciar sesión) a `Música\Karaoke\Por aprobar\Artista - Título [id].mp4` y los mete en la cola por ruta de archivo, sin esperar a que KaraFun los indexe (en ese caso entran **sin nombre de cantante**).
 - **Sube el catálogo**: el local al arrancar y cada día (~2,5 min para 3759 canciones) y el de KaraFun en línea cada 7 días (~89 000 canciones, ~2 min).
 - **Vigila KaraFun**: lo abre si está cerrado, pulsa OK en el aviso «The application seems to be frozen» que bloquea el arranque, y lo reinicia si deja de responder más de 90 s.
 - Nunca ejecuta dos veces la misma orden (diario local en `data/agent.db`) y, si se cae a mitad de una, al volver revisa la cola real de KaraFun antes de repetirla.
@@ -14,6 +14,15 @@ Programa que corre en el PC del karaoke y conecta los pedidos de las mesas (nube
 ## Instalar (una vez)
 
 Requisitos ya instalados en el PC del bar: Python 3.12, yt-dlp (con FFmpeg) y KaraFun Player 2.
+
+yt-dlp necesita además **Deno** para resolver el desafío de JavaScript de YouTube; sin él, YouTube responde «confirma que no eres un robot» y ningún video se descarga. Instalarlo y mantener yt-dlp al día (YouTube cambia a menudo):
+
+```powershell
+winget install DenoLand.Deno
+yt-dlp -U    # o: winget upgrade yt-dlp.yt-dlp
+```
+
+Después de instalar Deno, reinicia la tarea del agente (`agent\scripts\restart-agent.ps1`) para que tome el PATH nuevo.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File agent\install.ps1

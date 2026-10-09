@@ -34,6 +34,9 @@ FIXTURES = {
     "LIVELIVE001": {"id": "LIVELIVE001", "title": "En vivo", "uploader": "X", "duration": 0, "is_live": True},
     "MUSICMETA01": {"id": "MUSICMETA01", "title": "Cualquier cosa", "artist": "Shakira, Carlos Vives",
                     "track": "La Bicicleta", "uploader": "X", "duration": 230},
+    "FFmrQ2glCMc": {"id": "FFmrQ2glCMc", "title": "MILO J - M.A.I (KARAOKE - INSTRUMENTAL)", "uploader": "X",
+                    "duration": 184, "_bot_check": True},
+    "AGERESTRICT": {"id": "AGERESTRICT", "title": "X", "uploader": "X", "duration": 200, "_age_restricted": True},
 }
 
 
@@ -333,6 +336,24 @@ class AgentTests(unittest.TestCase):
             self.assertFalse(ack["ok"])
             self.assertEqual(ack["error"]["code"], code)
         self.assertFalse(self.counter.exists())
+
+    def test_download_passes_youtube_bot_check(self):
+        # YouTube pide «no eres un robot» al cliente web: el agente usa mweb y la descarga sale.
+        self.cloud.add_command(12, "download", {"request_id": "r", "youtube_id": "FFmrQ2glCMc", "max_duration_s": 480})
+        self.assertTrue(self.run_until(lambda: self.acks_for(12), timeout=30))
+        ack = self.acks_for(12)[0]
+        self.assertTrue(ack["ok"], ack)
+        self.assertEqual(ack["result"]["song"]["artist"], "MILO J")
+        self.assertEqual(self.counter.read_text().split(), ["FFmrQ2glCMc"])
+
+    def test_download_error_codes(self):
+        # Sin mweb, el bloqueo por robot no se confunde con restricción de edad; la edad sí se reporta como tal.
+        self.agent.downloader.extra_args = []
+        self.cloud.add_command(13, "download", {"request_id": "r", "youtube_id": "FFmrQ2glCMc", "max_duration_s": 480})
+        self.cloud.add_command(14, "download", {"request_id": "r", "youtube_id": "AGERESTRICT", "max_duration_s": 480})
+        self.assertTrue(self.run_until(lambda: self.acks_for(13) and self.acks_for(14), timeout=30))
+        self.assertEqual(self.acks_for(13)[0]["error"]["code"], "blocked")
+        self.assertEqual(self.acks_for(14)[0]["error"]["code"], "restricted")
 
     def test_long_command_keeps_lease_alive(self):
         # Mientras una orden está en marcha, el agente la informa en `working` y la nube no la reentrega.

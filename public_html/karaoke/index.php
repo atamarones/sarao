@@ -97,7 +97,7 @@ $v = static fn (string $f): int => (int) @filemtime(__DIR__ . '/../assets/' . $f
       <ol class="kk-steps">
         <li>Abre la canción en YouTube (mejor si dice «karaoke» o «letra»).</li>
         <li>Toca <strong>Compartir</strong> y luego <strong>Copiar enlace</strong>.</li>
-        <li>Pégalo aquí. Videos de máximo 8 minutos.</li>
+        <li>Pégalo aquí. Videos de máximo 10 minutos.</li>
       </ol>
       <form id="link-form" class="kk-form" novalidate>
         <label>Enlace del video

@@ -121,7 +121,7 @@ Canción:
 
 | type | payload | qué hace el agente | `result` en el ack |
 |---|---|---|---|
-| `download` | `request_id`, `youtube_id`, `max_duration_s` (480) | Comprueba metadatos con yt-dlp (no directos, duración ≤ máximo), descarga mp4 ≤ 720p a `Música\Karaoke\Por aprobar\Artista - Título [youtube_id].mp4` (si ese id ya existe en la carpeta, no repite) y sube la canción con `song.upsert` | `{ youtube_id, song: {…} }` |
+| `download` | `request_id`, `youtube_id`, `max_duration_s` (600) | Comprueba metadatos con yt-dlp (no directos, duración ≤ máximo), descarga mp4 (hasta 720p; hoy YouTube da 360p sin sesión) a `Música\Karaoke\Por aprobar\Artista - Título [youtube_id].mp4` (si ese id ya existe en la carpeta, no repite) y sube la canción con `song.upsert` | `{ youtube_id, song: {…} }` |
 | `enqueue` | `request_id`, `song`, `singer` | Añade la canción al final de la cola de KaraFun con ese cantante. Si KaraFun todavía no indexó el archivo (descarga reciente), la añade por ruta de archivo, y entonces sin cantante | `{ queue_pos, singer_shown }` (`queue_pos` es `null` si KaraFun aceptó la orden pero la canción no aparece en su cola; la nube decide con la cola del latido) |
 | `remove` | `request_id`, `singer`, `song` | Quita de la cola de KaraFun la entrada con ese cantante (marcador) que aún no suena; si entró sin cantante, la de ese título | `{ removed: true/false }` |
 | `catalog.resync` | `source` (`local` o `karafun`) | Vuelve a leer el catálogo de esa fuente y lo sube completo (§2) | `{ total_songs }` |

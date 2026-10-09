@@ -16,6 +16,14 @@ info = fixtures.get(yid)
 if info is None:
     print("ERROR: [youtube] Video unavailable. This video is private", file=sys.stderr)
     sys.exit(1)
+# Igual que YouTube hoy: al cliente web le pide que confirme que no es un robot; mweb sí responde.
+if info.get("_bot_check") and "youtube:player_client=default,mweb" not in args:
+    print("ERROR: [youtube] %s: Sign in to confirm you’re not a bot. Use --cookies-from-browser" % yid, file=sys.stderr)
+    sys.exit(1)
+if info.get("_age_restricted"):
+    print("ERROR: [youtube] %s: Sign in to confirm your age. This video may be inappropriate for some users." % yid,
+          file=sys.stderr)
+    sys.exit(1)
 if "--dump-single-json" in args:
     print(json.dumps(info))
     sys.exit(0)

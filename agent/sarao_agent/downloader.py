@@ -23,6 +23,9 @@ _TAIL_NOISE = re.compile(
     r"\s*[|\-–—]\s*(karaoke|karafun|letra|lyrics|versi[oó]n karaoke|con letra|instrumental)\b.*$", re.IGNORECASE
 )
 _FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+# Al cliente «web» YouTube le pide a yt-dlp «confirma que no eres un robot»; «mweb» (con un runtime de JS
+# como Deno para resolver el desafío) sí entrega los formatos combinados, hasta 360p.
+DEFAULT_YTDLP_ARGS = ("--extractor-args", "youtube:player_client=default,mweb")
 
 
 class DownloadError(Exception):
@@ -70,9 +73,10 @@ def safe_name(text: str, limit: int = 80) -> str:
 
 class Downloader:
     def __init__(self, ytdlp: str | list[str], karaoke_dir: Path, pending_dir: Path, tmp_dir: Path,
-                 max_height: int = 720, timeout_s: int = 900):
+                 max_height: int = 720, timeout_s: int = 900, extra_args: tuple[str, ...] = DEFAULT_YTDLP_ARGS):
         # Ruta del ejecutable o comando con argumentos (p. ej. [python, script] en las pruebas).
         self.ytdlp = [ytdlp] if isinstance(ytdlp, str) else list(ytdlp)
+        self.extra_args = list(extra_args)
         self.karaoke_dir = karaoke_dir
         self.pending_dir = pending_dir
         self.tmp_dir = tmp_dir
@@ -82,7 +86,7 @@ class Downloader:
     def _run(self, args: list[str], timeout_s: int) -> subprocess.CompletedProcess:
         try:
             return subprocess.run(  # noqa: S603 - argumentos controlados, sin shell
-                [*self.ytdlp, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                [*self.ytdlp, *self.extra_args, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=timeout_s, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except subprocess.TimeoutExpired:
@@ -96,11 +100,16 @@ class Downloader:
         url = f"https://www.youtube.com/watch?v={youtube_id}"
         proc = self._run(["--dump-single-json", "--no-playlist", "--skip-download", "--no-warnings", url], 120)
         if proc.returncode != 0:
+            log.error("yt-dlp no pudo consultar %s (%s): %s", youtube_id, proc.returncode, proc.stderr[-800:])
             err = proc.stderr.lower()
+            if "not a bot" in err:
+                raise DownloadError("blocked", "YouTube bloqueó la descarga en el bar. Pide ayuda en la barra.")
+            if "confirm your age" in err or "age-restricted" in err or "inappropriate for some users" in err:
+                raise DownloadError("restricted", "El video tiene restricción de edad.")
             if "private" in err or "unavailable" in err or "not available" in err or "removed" in err:
                 raise DownloadError("unavailable", "El video no existe o no está disponible.")
-            if "sign in" in err or "age" in err:
-                raise DownloadError("restricted", "El video tiene restricción de edad o requiere iniciar sesión.")
+            if "sign in" in err:
+                raise DownloadError("restricted", "YouTube pide iniciar sesión para ver este video.")
             raise DownloadError("probe_failed", "No se pudo consultar el video en YouTube.", retryable=True)
         info = json.loads(proc.stdout)
         if info.get("is_live") or info.get("live_status") in ("is_live", "is_upcoming", "post_live"):
